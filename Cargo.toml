@@ -1,0 +1,9 @@
+[package]
+name = "cargo-minver"
+version = "0.0.0"
+authors = ["Eduardo Broto <ebroto@tutanota.com>"]
+edition = "2018"
+description = "WIP"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
