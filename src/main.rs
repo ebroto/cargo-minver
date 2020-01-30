@@ -1,5 +1,4 @@
 #![feature(rustc_private)]
-#![feature(process_exitcode_placeholder)]
 
 extern crate rustc_driver;
 extern crate rustc_interface;
@@ -13,7 +12,7 @@ use syntax::ast::{self, PatKind, RangeEnd, RangeSyntax};
 use syntax::visit::{self, Visitor};
 
 use std::env;
-use std::process::{Command, ExitCode};
+use std::process::{self, Command};
 use std::str;
 
 use anyhow::{bail, Error};
@@ -75,11 +74,8 @@ impl Callbacks for MinverCallbacks {
 }
 
 // TODO: print error chain
-fn main() -> ExitCode {
-    match cargo_minver() {
-        Ok(_) => ExitCode::SUCCESS,
-        Err(_) => ExitCode::FAILURE,
-    }
+fn main() {
+    process::exit(cargo_minver().map_or(101, |_| 0));
 }
 
 // TODO: make this more readable
@@ -101,13 +97,17 @@ fn cargo_minver() -> Result<()> {
                 Ok(_) => Ok(()),
                 Err(_) => bail!("error running the compiler"),
             }
+
+            // TODO: start a client to report the analysis result to the "orchestrator" process.
         }
     } else {
-        run_cargo()
+        run_cargo_check()
     }
 }
 
-fn run_cargo() -> Result<()> {
+fn run_cargo_check() -> Result<()> {
+    // TODO: start a server to collect analysis from the compiler processes that cargo will spawn.
+
     let current_exe = env::current_exe()?;
     let exit_status = Command::new("cargo")
         .env("CARGO_MINVER_INTERCEPT", "1")
