@@ -50,11 +50,12 @@ fn main() -> ExitCode {
 // TODO: add automatic +nightly...
 fn cargo_minver() -> Result<()> {
     if env::var("CARGO_MINVER_INTERCEPT").is_ok() {
-        // Skip "cargo-minver"
-        let mut args = env::args().skip(1).collect::<Vec<_>>();
+        let mut args = env::args().collect::<Vec<_>>();
+        // Remove "rustc" from the argument list
+        args.remove(1);
 
         if args.iter().any(|arg| arg == "--print=cfg") {
-            Command::new(&args[0]).args(&args[1..]).status()?;
+            Command::new("rustc").args(&args[1..]).status()?;
             Ok(())
         } else {
             args.extend(vec!["--sysroot".to_string(), fetch_sysroot()?]);
