@@ -34,7 +34,7 @@ impl Callbacks for CompilerCallbacks {
             // TODO: visit
         });
 
-        Compilation::Stop
+        Compilation::Continue
     }
 }
 
@@ -46,7 +46,6 @@ fn main() -> ExitCode {
     }
 }
 
-// TODO: fix problem when compiling build scripts
 // TODO: make this more readable
 // TODO: add automatic +nightly...
 fn cargo_minver() -> Result<()> {
