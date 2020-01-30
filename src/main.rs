@@ -3,14 +3,18 @@
 
 extern crate rustc_driver;
 extern crate rustc_interface;
+extern crate rustc_span;
+extern crate syntax;
 
 use rustc_driver::{Callbacks, Compilation};
 use rustc_interface::{interface::Compiler, Queries};
-use std::{
-    env,
-    process::{Command, ExitCode},
-    str,
-};
+use rustc_span::source_map::Spanned;
+use syntax::ast::{self, PatKind, RangeEnd, RangeSyntax};
+use syntax::visit::{self, Visitor};
+
+use std::env;
+use std::process::{Command, ExitCode};
+use std::str;
 
 use anyhow::{bail, Error};
 
@@ -20,10 +24,41 @@ use anyhow::{bail, Error};
 
 type Result<T> = std::result::Result<T, Error>;
 
-struct CompilerCallbacks {}
+struct MinverVisitor {}
 
-impl Callbacks for CompilerCallbacks {
-    fn after_analysis<'tcx>(
+impl<'a> Visitor<'a> for MinverVisitor {
+    // TODO: This is just a POC. Instead of printing to stderr,
+    //       collect information about the lang/lib features used.
+    fn visit_expr(&mut self, e: &'a ast::Expr) {
+        match e.kind {
+            ast::ExprKind::Range(_, _, ast::RangeLimits::Closed) => {
+                eprintln!("inclusive range syntax found");
+            }
+            _ => {}
+        }
+        visit::walk_expr(self, e);
+    }
+
+    fn visit_pat(&mut self, pattern: &'a ast::Pat) {
+        match &pattern.kind {
+            #[rustfmt::skip]
+            PatKind::Range(_, _, Spanned { node: RangeEnd::Included(RangeSyntax::DotDotEq), ..}) => {
+                eprintln!("..= syntax in patterns found");
+            }
+            _ => {}
+        }
+        visit::walk_pat(self, pattern);
+    }
+
+    fn visit_mac(&mut self, _mac: &ast::Mac) {
+        // Do nothing. The default implementation will panic to avoid misuse.
+    }
+}
+
+struct MinverCallbacks {}
+
+impl Callbacks for MinverCallbacks {
+    fn after_expansion<'tcx>(
         &mut self,
         compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
@@ -31,7 +66,8 @@ impl Callbacks for CompilerCallbacks {
         compiler.session().abort_if_errors();
 
         queries.global_ctxt().unwrap().peek_mut().enter(|_tcx| {
-            // TODO: visit
+            let krate = queries.parse().unwrap().take();
+            visit::walk_crate(&mut MinverVisitor {}, &krate);
         });
 
         Compilation::Continue
@@ -59,9 +95,9 @@ fn cargo_minver() -> Result<()> {
             Ok(())
         } else {
             args.extend(vec!["--sysroot".to_string(), fetch_sysroot()?]);
-            let invocation =
-                || rustc_driver::run_compiler(&args, &mut CompilerCallbacks {}, None, None);
-            match rustc_driver::catch_fatal_errors(invocation) {
+            match rustc_driver::catch_fatal_errors(|| {
+                rustc_driver::run_compiler(&args, &mut MinverCallbacks {}, None, None)
+            }) {
                 Ok(_) => Ok(()),
                 Err(_) => bail!("error running the compiler"),
             }
