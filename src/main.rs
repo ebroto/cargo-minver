@@ -64,10 +64,8 @@ impl Callbacks for MinverCallbacks {
     ) -> Compilation {
         compiler.session().abort_if_errors();
 
-        queries.global_ctxt().unwrap().peek_mut().enter(|_tcx| {
-            let krate = queries.parse().unwrap().take();
-            visit::walk_crate(&mut MinverVisitor {}, &krate);
-        });
+        let krate = queries.parse().unwrap().take();
+        visit::walk_crate(&mut MinverVisitor {}, &krate);
 
         Compilation::Continue
     }
