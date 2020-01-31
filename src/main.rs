@@ -1,15 +1,8 @@
 #![feature(rustc_private)]
 
-extern crate rustc_driver;
-extern crate rustc_interface;
-extern crate rustc_span;
-extern crate syntax;
-
-use rustc_driver::{Callbacks, Compilation};
-use rustc_interface::{interface::Compiler, Queries};
-use rustc_span::source_map::Spanned;
-use syntax::ast::{self, PatKind, RangeEnd, RangeSyntax};
-use syntax::visit::{self, Visitor};
+mod driver;
+mod feature;
+mod ipc;
 
 use std::env;
 use std::process::{self, Command};
@@ -17,59 +10,16 @@ use std::str;
 
 use anyhow::{bail, Error};
 
-// TODO: modularize and move the rest to lib.rs
+use crate::ipc::Server;
+
+// TODO: move stuff to lib.rs, leave the minimum here
 // TODO: structopt for parsing arguments
 // TODO: pin to specific nightly
 
 type Result<T> = std::result::Result<T, Error>;
 
-struct MinverVisitor {}
-
-impl<'a> Visitor<'a> for MinverVisitor {
-    // TODO: This is just a POC. Instead of printing to stderr,
-    //       collect information about the lang/lib features used.
-    fn visit_expr(&mut self, e: &'a ast::Expr) {
-        match e.kind {
-            ast::ExprKind::Range(_, _, ast::RangeLimits::Closed) => {
-                eprintln!("inclusive range syntax found");
-            }
-            _ => {}
-        }
-        visit::walk_expr(self, e);
-    }
-
-    fn visit_pat(&mut self, pattern: &'a ast::Pat) {
-        match &pattern.kind {
-            #[rustfmt::skip]
-            PatKind::Range(_, _, Spanned { node: RangeEnd::Included(RangeSyntax::DotDotEq), ..}) => {
-                eprintln!("..= syntax in patterns found");
-            }
-            _ => {}
-        }
-        visit::walk_pat(self, pattern);
-    }
-
-    fn visit_mac(&mut self, _mac: &ast::Mac) {
-        // Do nothing. The default implementation will panic to avoid misuse.
-    }
-}
-
-struct MinverCallbacks {}
-
-impl Callbacks for MinverCallbacks {
-    fn after_expansion<'tcx>(
-        &mut self,
-        compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
-    ) -> Compilation {
-        compiler.session().abort_if_errors();
-
-        let krate = queries.parse().unwrap().take();
-        visit::walk_crate(&mut MinverVisitor {}, &krate);
-
-        Compilation::Continue
-    }
-}
+// TODO: configurable
+const SERVER_ADDRESS: &str = "127.0.0.1:64221";
 
 // TODO: print error chain
 fn main() {
@@ -89,22 +39,19 @@ fn cargo_minver() -> Result<()> {
             Ok(())
         } else {
             args.extend(vec!["--sysroot".to_string(), fetch_sysroot()?]);
-            match rustc_driver::catch_fatal_errors(|| {
-                rustc_driver::run_compiler(&args, &mut MinverCallbacks {}, None, None)
-            }) {
-                Ok(_) => Ok(()),
-                Err(_) => bail!("error running the compiler"),
-            }
 
-            // TODO: start a client to report the analysis result to the "orchestrator" process.
+            let analysis = driver::run_compiler(&args)?;
+            ipc::send_message(&SERVER_ADDRESS, &ipc::Message::Analysis(analysis))?;
+            Ok(())
         }
     } else {
         run_cargo_check()
     }
 }
 
+// TODO: force "cargo clean"
 fn run_cargo_check() -> Result<()> {
-    // TODO: start a server to collect analysis from the compiler processes that cargo will spawn.
+    let server = Server::new(SERVER_ADDRESS)?;
 
     let current_exe = env::current_exe()?;
     let exit_status = Command::new("cargo")
@@ -114,11 +61,13 @@ fn run_cargo_check() -> Result<()> {
         .spawn()?
         .wait()?;
 
-    if exit_status.success() {
-        Ok(())
-    } else {
+    if !exit_status.success() {
         bail!("error running cargo check")
     }
+
+    let analysis = server.collect()?;
+    dbg!(analysis);
+    Ok(())
 }
 
 // TODO: check if we really need the more complex approaches
