@@ -14,10 +14,10 @@ pub struct Feature {
     pub since: Version,
 }
 
-impl<'a> TryFrom<&'a RustFeature> for Feature {
+impl TryFrom<&RustFeature> for Feature {
     type Error = anyhow::Error;
 
-    fn try_from(feature: &'a RustFeature) -> Result<Self> {
+    fn try_from(feature: &RustFeature) -> Result<Self> {
         let name = feature.name.to_string();
         let since = feature.since.parse()?;
         Ok(Feature { name, since })

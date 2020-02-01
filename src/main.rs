@@ -5,6 +5,7 @@ mod feature;
 mod ipc;
 
 use std::env;
+use std::path::Path;
 use std::process::{self, Command};
 use std::str;
 
@@ -20,43 +21,49 @@ type Result<T> = std::result::Result<T, Error>;
 
 // TODO: configurable
 const SERVER_ADDRESS: &str = "127.0.0.1:64221";
+const WRAPPER_ENV: &str = "RUSTC_WRAPPER";
 
 // TODO: print error chain
 fn main() {
     process::exit(cargo_minver().map_or(101, |_| 0));
 }
 
-// TODO: make this more readable
 // TODO: add automatic +nightly...
 fn cargo_minver() -> Result<()> {
-    if env::var("CARGO_MINVER_INTERCEPT").is_ok() {
-        let mut args = env::args().collect::<Vec<_>>();
-        // Remove "rustc" from the argument list
-        args.remove(1);
+    let current_exe = env::current_exe()?;
 
-        if args.iter().any(|arg| arg == "--print=cfg") {
-            Command::new("rustc").args(&args[1..]).status()?;
-            Ok(())
-        } else {
-            args.extend(vec!["--sysroot".to_string(), fetch_sysroot()?]);
-
-            let analysis = driver::run_compiler(&args)?;
-            ipc::send_message(&SERVER_ADDRESS, &ipc::Message::Analysis(analysis))?;
-            Ok(())
-        }
+    if is_compiler_wrapper(&current_exe) {
+        run_as_compiler_wrapper()
     } else {
-        run_cargo_check()
+        run_as_cargo_subcommand(&current_exe)
+    }
+}
+
+fn run_as_compiler_wrapper() -> Result<()> {
+    let mut args = env::args().collect::<Vec<_>>();
+    // Remove "rustc" from the argument list
+    args.remove(1);
+
+    if args.iter().any(|arg| arg == "--print=cfg") {
+        // Cargo is collecting information about the crate: passthrough to the actual compiler.
+        Command::new("rustc").args(&args[1..]).status()?;
+        Ok(())
+    } else {
+        // Cargo is building a crate: run the compiler using our driver.
+        args.extend(vec!["--sysroot".to_string(), fetch_sysroot()?]);
+
+        let analysis = driver::run_compiler(&args)?;
+        ipc::send_message(&SERVER_ADDRESS, &ipc::Message::Analysis(analysis))?;
+        Ok(())
     }
 }
 
 // TODO: force "cargo clean"
-fn run_cargo_check() -> Result<()> {
+fn run_as_cargo_subcommand<P: AsRef<Path>>(current_exe: P) -> Result<()> {
     let server = Server::new(SERVER_ADDRESS)?;
 
-    let current_exe = env::current_exe()?;
     let exit_status = Command::new("cargo")
-        .env("CARGO_MINVER_INTERCEPT", "1")
-        .env("RUSTC_WRAPPER", current_exe)
+        .env(WRAPPER_ENV, current_exe.as_ref())
         .args(vec!["check", "--tests", "--examples", "--benches"])
         .spawn()?
         .wait()?;
@@ -65,9 +72,14 @@ fn run_cargo_check() -> Result<()> {
         bail!("error running cargo check")
     }
 
-    let analysis = server.collect()?;
-    dbg!(analysis);
+    let _analysis = server.collect()?;
     Ok(())
+}
+
+fn is_compiler_wrapper<P: AsRef<Path>>(current_exe: P) -> bool {
+    current_exe.as_ref().to_str().map_or(false, |p| {
+        env::var(WRAPPER_ENV).map_or(false, |v| v.contains(p))
+    })
 }
 
 // TODO: check if we really need the more complex approaches

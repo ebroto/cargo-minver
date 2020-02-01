@@ -9,7 +9,7 @@ use crate::feature::CrateAnalysis;
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Message {
     Analysis(CrateAnalysis),
-    Finish,
+    Collect,
 }
 
 pub fn send_message<A: ToSocketAddrs>(addr: A, message: &Message) -> Result<()> {
@@ -43,7 +43,7 @@ impl Server {
                         Message::Analysis(analysis) => {
                             data.push(analysis);
                         }
-                        Message::Finish => {
+                        Message::Collect => {
                             break;
                         }
                     }
@@ -56,7 +56,7 @@ impl Server {
     }
 
     pub fn collect(self) -> Result<Vec<CrateAnalysis>> {
-        send_message(&self.addr, &Message::Finish)?;
+        send_message(&self.addr, &Message::Collect)?;
         self.join_handle.join().unwrap()
     }
 }
