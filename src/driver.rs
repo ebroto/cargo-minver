@@ -3,8 +3,9 @@ use rustc_feature::ACCEPTED_FEATURES;
 use rustc_interface::{interface::Compiler, Queries};
 use rustc_span::source_map::Spanned;
 use rustc_span::symbol::{sym, Symbol};
-use syntax::ast::{self, PatKind, RangeEnd, RangeSyntax};
+use syntax::ast::{self, Pat, PatKind, RangeEnd, RangeSyntax};
 use syntax::attr;
+use syntax::ptr::P;
 use syntax::visit::{self, Visitor};
 
 use std::collections::HashSet;
@@ -27,17 +28,29 @@ impl<'a> Visitor<'a> for PostExpansionVisitor {
             }
             _ => {}
         }
+
         visit::walk_expr(self, e);
     }
 
     fn visit_pat(&mut self, pattern: &'a ast::Pat) {
+        fn has_rest(ps: &[P<Pat>]) -> bool {
+            ps.iter().any(|p| p.is_rest())
+        }
+
         match &pattern.kind {
             #[rustfmt::skip]
             PatKind::Range(_, _, Spanned { node: RangeEnd::Included(RangeSyntax::DotDotEq), ..}) => {
                 self.features.insert(sym::dotdoteq_in_patterns);
             }
+            PatKind::Tuple(ps) if has_rest(ps) => {
+                self.features.insert(sym::dotdot_in_tuple_patterns);
+            }
+            PatKind::TupleStruct(_, ps) if ps.len() > 1 && has_rest(ps) => {
+                self.features.insert(sym::dotdot_in_tuple_patterns);
+            }
             _ => {}
         }
+
         visit::walk_pat(self, pattern);
     }
 
