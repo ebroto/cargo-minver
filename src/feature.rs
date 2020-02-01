@@ -1,5 +1,3 @@
-extern crate rustc_feature;
-
 use rustc_feature::Feature as RustFeature;
 
 use std::convert::TryFrom;

@@ -1,5 +1,11 @@
 #![feature(rustc_private)]
 
+extern crate rustc_driver;
+extern crate rustc_feature;
+extern crate rustc_interface;
+extern crate rustc_span;
+extern crate syntax;
+
 mod driver;
 mod feature;
 mod ipc;
@@ -60,8 +66,10 @@ fn run_as_compiler_wrapper() -> Result<()> {
 
 // TODO: force "cargo clean"
 fn run_as_cargo_subcommand<P: AsRef<Path>>(current_exe: P) -> Result<()> {
+    // Start a server that will receive the results of the analysis of each crate.
     let server = Server::new(SERVER_ADDRESS)?;
 
+    // Run `cargo check` to build all the crates.
     let exit_status = Command::new("cargo")
         .env(WRAPPER_ENV, current_exe.as_ref())
         .args(vec!["check", "--tests", "--examples", "--benches"])
@@ -72,7 +80,16 @@ fn run_as_cargo_subcommand<P: AsRef<Path>>(current_exe: P) -> Result<()> {
         bail!("error running cargo check")
     }
 
-    let _analysis = server.collect()?;
+    // Process the results of the analysis.
+    let analysis = server.collect()?;
+    let mut features = analysis
+        .iter()
+        .map(|a| &a.features)
+        .flatten()
+        .collect::<Vec<_>>();
+    features.sort_by(|a, b| a.since.partial_cmp(&b.since).unwrap());
+
+    dbg!(&features);
     Ok(())
 }
 

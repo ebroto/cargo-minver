@@ -1,11 +1,8 @@
-extern crate rustc_driver;
-extern crate rustc_interface;
-extern crate rustc_span;
-extern crate syntax;
-
 use rustc_driver::{Callbacks, Compilation};
+use rustc_feature::ACCEPTED_FEATURES;
 use rustc_interface::{interface::Compiler, Queries};
 use rustc_span::source_map::Spanned;
+use rustc_span::symbol::{sym, Symbol};
 use syntax::ast::{self, PatKind, RangeEnd, RangeSyntax};
 use syntax::attr;
 use syntax::visit::{self, Visitor};
@@ -14,20 +11,19 @@ use std::collections::HashSet;
 
 use anyhow::{format_err, Result};
 
-use crate::feature::CrateAnalysis;
+use crate::feature::{CrateAnalysis, Feature};
 
 #[derive(Debug, Default)]
 struct PostExpansionVisitor {
-    features: HashSet<&'static str>,
+    features: HashSet<Symbol>,
 }
 
 impl<'a> Visitor<'a> for PostExpansionVisitor {
-    // TODO: use features sym?
     // TODO: add missing lang features
     fn visit_expr(&mut self, e: &'a ast::Expr) {
         match e.kind {
             ast::ExprKind::Range(_, _, ast::RangeLimits::Closed) => {
-                self.features.insert("inclusive range syntax");
+                self.features.insert(sym::inclusive_range_syntax);
             }
             _ => {}
         }
@@ -38,7 +34,7 @@ impl<'a> Visitor<'a> for PostExpansionVisitor {
         match &pattern.kind {
             #[rustfmt::skip]
             PatKind::Range(_, _, Spanned { node: RangeEnd::Included(RangeSyntax::DotDotEq), ..}) => {
-                self.features.insert("..= syntax in patterns");
+                self.features.insert(sym::dotdoteq_in_patterns);
             }
             _ => {}
         }
@@ -71,17 +67,24 @@ impl Callbacks for MinverCallbacks {
             None => String::from("unknown_crate"),
         };
 
-        let mut visitor: PostExpansionVisitor = Default::default();
+        let mut visitor = PostExpansionVisitor::default();
         visit::walk_crate(&mut visitor, &krate);
-        // TODO: fetch features with given name from ACCEPTED and translate to this crate feature repr
-        self.analysis.features = vec![];
 
+        use std::convert::TryInto;
+        let features = visitor
+            .features
+            .iter()
+            .flat_map(|name| ACCEPTED_FEATURES.iter().find(|f| &f.name == name))
+            .flat_map(|feature| feature.try_into().ok())
+            .collect::<Vec<Feature>>();
+
+        self.analysis.features.extend(features);
         Compilation::Continue
     }
 }
 
 pub fn run_compiler(args: &[String]) -> Result<CrateAnalysis> {
-    let mut callbacks: MinverCallbacks = Default::default();
+    let mut callbacks = MinverCallbacks::default();
 
     // NOTE: The error returned from the driver was already displayed.
     rustc_driver::catch_fatal_errors(|| {
