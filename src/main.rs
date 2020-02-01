@@ -15,15 +15,13 @@ use std::path::Path;
 use std::process::{self, Command};
 use std::str;
 
-use anyhow::{bail, Error};
+use anyhow::{bail, Result};
 
 use crate::ipc::Server;
 
 // TODO: move stuff to lib.rs, leave the minimum here
 // TODO: structopt for parsing arguments
 // TODO: pin to specific nightly
-
-type Result<T> = std::result::Result<T, Error>;
 
 // TODO: configurable
 const SERVER_ADDRESS: &str = "127.0.0.1:64221";
@@ -64,8 +62,16 @@ fn run_as_compiler_wrapper() -> Result<()> {
     }
 }
 
-// TODO: force "cargo clean"
 fn run_as_cargo_subcommand<P: AsRef<Path>>(current_exe: P) -> Result<()> {
+    // We need to run `cargo clean` to make sure we see all the code.
+    let exit_status = Command::new("cargo") //
+        .arg("clean")
+        .spawn()?
+        .wait()?;
+    if !exit_status.success() {
+        bail!("error running cargo clean")
+    }
+
     // Start a server that will receive the results of the analysis of each crate.
     let server = Server::new(SERVER_ADDRESS)?;
 
@@ -75,7 +81,6 @@ fn run_as_cargo_subcommand<P: AsRef<Path>>(current_exe: P) -> Result<()> {
         .args(vec!["check", "--tests", "--examples", "--benches"])
         .spawn()?
         .wait()?;
-
     if !exit_status.success() {
         bail!("error running cargo check")
     }
