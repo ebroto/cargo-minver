@@ -67,11 +67,9 @@ struct MinverCallbacks {
 impl Callbacks for MinverCallbacks {
     fn after_expansion<'tcx>(
         &mut self,
-        compiler: &Compiler,
+        _compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
-        compiler.session().abort_if_errors();
-
         let krate = queries.parse().unwrap().take();
         // TODO: see what's up with all the unknown crates, are all of them build scripts?
         //       also, link build_scripts with crates
