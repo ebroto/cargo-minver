@@ -104,5 +104,5 @@ pub fn run_compiler(args: &[String]) -> Result<CrateAnalysis> {
         rustc_driver::run_compiler(args, &mut callbacks, None, None)
     })
     .map(|_| callbacks.analysis)
-    .map_err(|_| format_err!("error running the compiler"))
+    .map_err(|_| format_err!("compiler errored out"))
 }

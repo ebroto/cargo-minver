@@ -1,7 +1,8 @@
-use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
+use std::io::Write;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpListener, TcpStream};
 use std::thread::{self, JoinHandle};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::feature::CrateAnalysis;
@@ -12,51 +13,56 @@ pub enum Message {
     Collect,
 }
 
-pub fn send_message<A: ToSocketAddrs>(addr: A, message: &Message) -> Result<()> {
-    use std::io::Write;
-
-    let buffer = bincode::serialize(&message)?;
-    let mut stream = TcpStream::connect(addr)?;
-    stream.write_all(&buffer)?;
-
-    Ok(())
-}
-
 #[derive(Debug)]
 pub struct Server {
-    addr: SocketAddr,
+    address: SocketAddr,
     join_handle: JoinHandle<Result<Vec<CrateAnalysis>>>,
 }
 
 impl Server {
-    pub fn new<A: ToSocketAddrs>(address: A) -> Result<Self> {
-        let listener = TcpListener::bind(address)?;
-        let addr = listener.local_addr()?;
+    pub fn new(address: SocketAddr) -> Result<Self> {
+        let listener = TcpListener::bind(address).context("could not bind to local address")?;
+        let join_handle = thread::Builder::new()
+            .name("server".into())
+            .spawn(|| Server::serve(listener))
+            .context("error serving")?;
 
-        let join_handle = thread::Builder::new().name("server".into()).spawn(
-            move || -> Result<Vec<CrateAnalysis>> {
-                let mut data = vec![];
-                for stream in listener.incoming() {
-                    let stream = stream?;
-                    let message = bincode::deserialize_from(&stream)?;
-                    match message {
-                        Message::Analysis(analysis) => {
-                            data.push(analysis);
-                        }
-                        Message::Collect => {
-                            break;
-                        }
-                    }
+        Ok(Self {
+            address,
+            join_handle,
+        })
+    }
+
+    fn serve(listener: TcpListener) -> Result<Vec<CrateAnalysis>> {
+        let mut data = Vec::new();
+        for stream in listener.incoming() {
+            let stream = stream?;
+            let message = bincode::deserialize_from(&stream)?;
+            match message {
+                Message::Analysis(analysis) => {
+                    data.push(analysis);
                 }
-                Ok(data)
-            },
-        )?;
-
-        Ok(Self { addr, join_handle })
+                Message::Collect => {
+                    break;
+                }
+            }
+        }
+        Ok(data)
     }
 
     pub fn collect(self) -> Result<Vec<CrateAnalysis>> {
-        send_message(&self.addr, &Message::Collect)?;
+        send_message(self.address, &Message::Collect).context("could not stop server")?;
         self.join_handle.join().unwrap()
     }
+}
+
+pub fn send_message(addr: SocketAddr, message: &Message) -> Result<()> {
+    let buffer = bincode::serialize(&message)?;
+    let mut stream = TcpStream::connect(addr)?;
+    stream.write_all(&buffer)?;
+    Ok(())
+}
+
+pub fn server_address(port: u16) -> SocketAddr {
+    SocketAddrV4::new(Ipv4Addr::LOCALHOST, port).into()
 }
