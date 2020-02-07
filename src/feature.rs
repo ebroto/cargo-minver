@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Feature {
+    // TODO: differentiate which crate's `build_script_build` it is
     pub name: String,
     pub since: Version,
 }

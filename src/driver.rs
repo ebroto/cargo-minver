@@ -4,7 +4,6 @@ use rustc_interface::{interface::Compiler, Queries};
 use rustc_span::source_map::Spanned;
 use rustc_span::symbol::{sym, Symbol};
 use syntax::ast::{self, Pat, PatKind, RangeEnd, RangeSyntax};
-use syntax::attr;
 use syntax::ptr::P;
 use syntax::visit::{self, Visitor};
 
@@ -70,14 +69,7 @@ impl Callbacks for MinverCallbacks {
         _compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
-        let krate = queries.parse().unwrap().take();
-        // TODO: see what's up with all the unknown crates, are all of them build scripts?
-        //       also, link build_scripts with crates
-        self.analysis.name = match attr::find_crate_name(&krate.attrs) {
-            Some(name) => name.to_string(),
-            None => String::from("unknown_crate"),
-        };
-
+        let (krate, ..) = &*queries.expansion().unwrap().peek();
         let mut visitor = PostExpansionVisitor::default();
         visit::walk_crate(&mut visitor, &krate);
 
@@ -90,6 +82,16 @@ impl Callbacks for MinverCallbacks {
             .collect::<Vec<Feature>>();
 
         self.analysis.features.extend(features);
+        Compilation::Continue
+    }
+
+    fn after_analysis<'tcx>(
+        &mut self,
+        _compiler: &Compiler,
+        queries: &'tcx Queries<'tcx>,
+    ) -> Compilation {
+        self.analysis.name = queries.crate_name().unwrap().peek().clone();
+
         Compilation::Continue
     }
 }
