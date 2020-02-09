@@ -1,7 +1,10 @@
 #![feature(rustc_private)]
 
+extern crate rustc;
+extern crate rustc_attr;
 extern crate rustc_driver;
 extern crate rustc_feature;
+extern crate rustc_hir;
 extern crate rustc_interface;
 extern crate rustc_span;
 extern crate syntax;
@@ -123,7 +126,14 @@ fn run_as_cargo_subcommand<P: AsRef<Path>>(current_exe: P) -> Result<()> {
         .map(|a| &a.features)
         .flatten()
         .collect::<Vec<_>>();
-    features.sort_by(|a, b| a.since.partial_cmp(&b.since).unwrap());
+    features.sort_unstable_by(|a, b| {
+        if a.since != b.since {
+            b.since.cmp(&a.since)
+        } else {
+            a.name.cmp(&b.name)
+        }
+    });
+    features.dedup();
     dbg!(&features);
 
     Ok(())

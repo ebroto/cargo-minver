@@ -1,25 +1,30 @@
 use rustc_feature::Feature as RustFeature;
 
-use std::convert::TryFrom;
-
-use anyhow::Result;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum FeatureKind {
+    Lang,
+    Lib,
+}
+
+// TODO: allow ignoring features for minimum version calculation
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Feature {
     // TODO: differentiate which crate's `build_script_build` it is
     pub name: String,
-    pub since: Version,
+    pub kind: FeatureKind,
+    pub since: Option<Version>,
 }
 
-impl TryFrom<&RustFeature> for Feature {
-    type Error = anyhow::Error;
-
-    fn try_from(feature: &RustFeature) -> Result<Self> {
-        let name = feature.name.to_string();
-        let since = feature.since.parse()?;
-        Ok(Feature { name, since })
+impl From<&RustFeature> for Feature {
+    fn from(feature: &RustFeature) -> Self {
+        Feature {
+            name: feature.name.to_string(),
+            kind: FeatureKind::Lang,
+            since: Some(feature.since.parse().unwrap()),
+        }
     }
 }
 

@@ -1,26 +1,35 @@
+use rustc::hir::map::Map;
+use rustc::ty::TyCtxt;
+use rustc_attr::{self as attr, Stability};
 use rustc_driver::{Callbacks, Compilation};
 use rustc_feature::ACCEPTED_FEATURES;
-use rustc_interface::{interface::Compiler, Queries};
+use rustc_hir as hir;
+use rustc_hir::def_id::DefId;
+use rustc_hir::intravisit::{self, NestedVisitorMap};
+use rustc_interface::interface::Compiler;
+use rustc_interface::Queries;
 use rustc_span::source_map::Spanned;
 use rustc_span::symbol::{sym, Symbol};
+use rustc_span::Span;
 use syntax::ast::{self, Pat, PatKind, RangeEnd, RangeSyntax};
 use syntax::ptr::P;
-use syntax::visit::{self, Visitor};
+use syntax::visit;
 
 use std::collections::HashSet;
 
 use anyhow::{format_err, Result};
 
-use crate::feature::{CrateAnalysis, Feature};
+use crate::feature::{CrateAnalysis, Feature, FeatureKind};
 
 #[derive(Debug, Default)]
 struct PostExpansionVisitor {
     features: HashSet<Symbol>,
 }
 
-impl<'a> Visitor<'a> for PostExpansionVisitor {
+impl<'a> visit::Visitor<'a> for PostExpansionVisitor {
     // TODO: add missing lang features
     fn visit_expr(&mut self, e: &'a ast::Expr) {
+        #[allow(clippy::single_match)]
         match e.kind {
             ast::ExprKind::Range(_, _, ast::RangeLimits::Closed) => {
                 self.features.insert(sym::inclusive_range_syntax);
@@ -38,7 +47,7 @@ impl<'a> Visitor<'a> for PostExpansionVisitor {
 
         match &pattern.kind {
             #[rustfmt::skip]
-            PatKind::Range(_, _, Spanned { node: RangeEnd::Included(RangeSyntax::DotDotEq), ..}) => {
+            PatKind::Range(.., Spanned { node: RangeEnd::Included(RangeSyntax::DotDotEq), ..}) => {
                 self.features.insert(sym::dotdoteq_in_patterns);
             }
             PatKind::Tuple(ps) if has_rest(ps) => {
@@ -58,11 +67,94 @@ impl<'a> Visitor<'a> for PostExpansionVisitor {
     }
 }
 
+#[derive(Debug, Hash, PartialEq, Eq)]
+struct LibFeature {
+    name: Symbol,
+    since: Option<Symbol>,
+}
+
+impl From<LibFeature> for Feature {
+    fn from(feature: LibFeature) -> Self {
+        Feature {
+            name: feature.name.to_string(),
+            kind: FeatureKind::Lib,
+            since: feature.since.map(|s| s.as_str().parse().unwrap()),
+        }
+    }
+}
+
+struct StabilityCollector<'tcx> {
+    tcx: TyCtxt<'tcx>,
+    features: HashSet<LibFeature>,
+}
+
+impl<'tcx> StabilityCollector<'tcx> {
+    fn new(tcx: TyCtxt<'tcx>) -> Self {
+        StabilityCollector {
+            tcx,
+            features: HashSet::new(),
+        }
+    }
+
+    fn process_stability(&mut self, def_id: DefId, span: Span) {
+        if def_id.is_local() {
+            return;
+        }
+
+        let stability = self.tcx.lookup_stability(def_id);
+        match stability {
+            Some(&Stability {
+                level: attr::Unstable { .. },
+                feature,
+                ..
+            }) => {
+                // ignore internal features
+                if !span.allows_unstable(feature) {
+                    self.features.insert(LibFeature {
+                        name: feature,
+                        since: None,
+                    });
+                }
+            }
+            Some(&Stability {
+                level: attr::Stable { since },
+                feature,
+                ..
+            }) => {
+                self.features.insert(LibFeature {
+                    name: feature,
+                    since: Some(since),
+                });
+            }
+            _ => {}
+        }
+    }
+}
+
+// TODO: check extern crate and trait impls.
+// TODO: see if the rest of stability checks can be done here.
+impl<'tcx> intravisit::Visitor<'tcx> for StabilityCollector<'tcx> {
+    type Map = Map<'tcx>;
+
+    fn nested_visit_map(&mut self) -> intravisit::NestedVisitorMap<'_, Self::Map> {
+        // TODO: check if OnlyBodies is enough
+        NestedVisitorMap::All(&self.tcx.hir())
+    }
+
+    fn visit_path(&mut self, path: &'tcx hir::Path<'tcx>, _id: hir::HirId) {
+        if let Some(def_id) = path.res.opt_def_id() {
+            self.process_stability(def_id, path.span);
+        }
+        intravisit::walk_path(self, path);
+    }
+}
+
 #[derive(Debug, Default)]
 struct MinverCallbacks {
     analysis: CrateAnalysis,
 }
 
+// TODO: check for nightly features and exit early
 impl Callbacks for MinverCallbacks {
     fn after_expansion<'tcx>(
         &mut self,
@@ -73,15 +165,13 @@ impl Callbacks for MinverCallbacks {
         let mut visitor = PostExpansionVisitor::default();
         visit::walk_crate(&mut visitor, &krate);
 
-        use std::convert::TryInto;
-        let features = visitor
+        let lang_features = visitor
             .features
-            .iter()
-            .flat_map(|name| ACCEPTED_FEATURES.iter().find(|f| &f.name == name))
-            .flat_map(|feature| feature.try_into().ok())
-            .collect::<Vec<Feature>>();
+            .into_iter()
+            .flat_map(|name| ACCEPTED_FEATURES.iter().find(|f| f.name == name))
+            .map(Into::into);
+        self.analysis.features.extend(lang_features);
 
-        self.analysis.features.extend(features);
         Compilation::Continue
     }
 
@@ -91,6 +181,15 @@ impl Callbacks for MinverCallbacks {
         queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
         self.analysis.name = queries.crate_name().unwrap().peek().clone();
+
+        queries.global_ctxt().unwrap().peek_mut().enter(|tcx| {
+            let mut visitor = StabilityCollector::new(tcx);
+            let krate = tcx.hir().krate();
+            intravisit::walk_crate(&mut visitor, krate);
+
+            let lib_features = visitor.features.into_iter().map(Into::into);
+            self.analysis.features.extend(lib_features);
+        });
 
         Compilation::Continue
     }
