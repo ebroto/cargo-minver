@@ -12,6 +12,7 @@ extern crate syntax;
 mod driver;
 mod feature;
 mod ipc;
+mod visitor;
 
 use std::env;
 use std::path::Path;
