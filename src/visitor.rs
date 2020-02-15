@@ -3,7 +3,8 @@ use rustc::ty::TyCtxt;
 use rustc_attr::{self as attr, Stability, StabilityLevel};
 use rustc_feature::ACCEPTED_FEATURES;
 use rustc_hir as hir;
-use rustc_hir::def_id::DefId;
+use rustc_hir::def::{DefKind, Res};
+use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX};
 use rustc_hir::intravisit::{self, NestedVisitorMap};
 use rustc_resolve::{ParentScope, Resolver};
 use rustc_session::Session;
@@ -110,14 +111,57 @@ impl<'tcx> StabilityCollector<'tcx> {
     }
 }
 
-// TODO: check extern crate and trait impls.
 // TODO: see if the rest of stability checks can be done here.
 impl<'tcx> intravisit::Visitor<'tcx> for StabilityCollector<'tcx> {
     type Map = Map<'tcx>;
 
     fn nested_visit_map(&mut self) -> intravisit::NestedVisitorMap<'_, Self::Map> {
-        // TODO: check if OnlyBodies is enough
         NestedVisitorMap::All(&self.tcx.hir())
+    }
+
+    fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) {
+        match item.kind {
+            hir::ItemKind::ExternCrate(_) => {
+                if item.span.is_dummy() {
+                    return;
+                }
+
+                let def_id = self.tcx.hir().local_def_id(item.hir_id);
+                let cnum = match self.tcx.extern_mod_stmt_cnum(def_id) {
+                    Some(cnum) => cnum,
+                    None => return,
+                };
+                let def_id = DefId {
+                    krate: cnum,
+                    index: CRATE_DEF_INDEX,
+                };
+                self.process_stability(def_id, item.span);
+            }
+
+            hir::ItemKind::Impl {
+                of_trait: Some(ref t),
+                items,
+                ..
+            } => {
+                if let Res::Def(DefKind::Trait, trait_did) = t.path.res {
+                    for impl_item_ref in items {
+                        let impl_item = self.tcx.hir().impl_item(impl_item_ref.id);
+                        let trait_item_def_id = self
+                            .tcx
+                            .associated_items(trait_did)
+                            .find(|item| item.ident.name == impl_item.ident.name)
+                            .map(|item| item.def_id);
+                        if let Some(def_id) = trait_item_def_id {
+                            self.process_stability(def_id, impl_item.span);
+                        }
+                    }
+                }
+            }
+
+            _ => {}
+        }
+
+        intravisit::walk_item(self, item);
     }
 
     fn visit_path(&mut self, path: &'tcx hir::Path<'tcx>, _id: hir::HirId) {
