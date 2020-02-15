@@ -7,41 +7,49 @@ use syntax::visit;
 use anyhow::{format_err, Result};
 
 use crate::feature::CrateAnalysis;
-use crate::visitor::{PostExpansionVisitor, StabilityCollector};
+use crate::visitor::{self, PostExpansionVisitor, StabilityCollector};
 
 #[derive(Debug, Default)]
 struct MinverCallbacks {
     analysis: CrateAnalysis,
 }
 
-// TODO: check for nightly features and exit early
 impl Callbacks for MinverCallbacks {
     fn after_expansion<'tcx>(
         &mut self,
-        _compiler: &Compiler,
+        compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
-        let (krate, ..) = &*queries.expansion().unwrap().peek();
+        let session = compiler.session();
+        session.abort_if_errors();
+
+        let (krate, boxed_resolver, ..) = &*queries.expansion().unwrap().peek();
+        boxed_resolver.borrow().borrow_mut().access(|resolver| {
+            let features = visitor::process_imported_macros(session, resolver);
+            self.analysis.features.extend(features);
+        });
+
         let mut visitor = PostExpansionVisitor::default();
         visit::walk_crate(&mut visitor, &krate);
+        self.analysis.features.extend(visitor.into_features());
 
-        self.analysis.features.extend(visitor.collect_features());
         Compilation::Continue
     }
 
     fn after_analysis<'tcx>(
         &mut self,
-        _compiler: &Compiler,
+        compiler: &Compiler,
         queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
-        self.analysis.name = queries.crate_name().unwrap().peek().clone();
+        compiler.session().abort_if_errors();
 
+        self.analysis.name = queries.crate_name().unwrap().peek().clone();
         queries.global_ctxt().unwrap().peek_mut().enter(|tcx| {
             let krate = tcx.hir().krate();
             let mut visitor = StabilityCollector::new(tcx);
             intravisit::walk_crate(&mut visitor, krate);
 
-            self.analysis.features.extend(visitor.collect_features());
+            self.analysis.features.extend(visitor.into_features());
         });
 
         Compilation::Continue

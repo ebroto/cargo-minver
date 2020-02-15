@@ -6,6 +6,8 @@ extern crate rustc_driver;
 extern crate rustc_feature;
 extern crate rustc_hir;
 extern crate rustc_interface;
+extern crate rustc_resolve;
+extern crate rustc_session;
 extern crate rustc_span;
 extern crate syntax;
 
@@ -127,6 +129,7 @@ fn run_as_cargo_subcommand<P: AsRef<Path>>(current_exe: P) -> Result<()> {
         .map(|a| &a.features)
         .flatten()
         .collect::<Vec<_>>();
+
     features.sort_unstable_by(|a, b| {
         if a.since != b.since {
             b.since.cmp(&a.since)

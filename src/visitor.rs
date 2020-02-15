@@ -1,20 +1,24 @@
 use rustc::hir::map::Map;
 use rustc::ty::TyCtxt;
-use rustc_attr::{self as attr, Stability};
+use rustc_attr::{self as attr, Stability, StabilityLevel};
 use rustc_feature::ACCEPTED_FEATURES;
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
 use rustc_hir::intravisit::{self, NestedVisitorMap};
+use rustc_resolve::{ParentScope, Resolver};
+use rustc_session::Session;
 use rustc_span::source_map::Spanned;
 use rustc_span::symbol::{sym, Symbol};
 use rustc_span::Span;
-use syntax::ast::{self, Pat, PatKind, RangeEnd, RangeSyntax};
+use syntax::ast::{self, Ident, Pat, PatKind, RangeEnd, RangeSyntax};
 use syntax::ptr::P;
 use syntax::visit;
 
 use std::collections::HashSet;
 
-use crate::feature::{Feature, FeatureKind};
+use crate::feature::Feature;
+
+// TODO: stability module, separate visitors in different file(s)?
 
 #[derive(Debug, Default)]
 pub struct PostExpansionVisitor {
@@ -22,7 +26,7 @@ pub struct PostExpansionVisitor {
 }
 
 impl PostExpansionVisitor {
-    pub fn collect_features(self) -> Vec<Feature> {
+    pub fn into_features(self) -> Vec<Feature> {
         self.features
             .into_iter()
             .flat_map(|name| ACCEPTED_FEATURES.iter().find(|f| f.name == name))
@@ -68,29 +72,13 @@ impl<'a> visit::Visitor<'a> for PostExpansionVisitor {
     }
 
     fn visit_mac(&mut self, _mac: &ast::Mac) {
-        // Do nothing. The default implementation will panic to avoid misuse.
-    }
-}
-
-#[derive(Debug, Hash, PartialEq, Eq)]
-struct LibFeature {
-    name: Symbol,
-    since: Option<Symbol>,
-}
-
-impl From<LibFeature> for Feature {
-    fn from(feature: LibFeature) -> Self {
-        Feature {
-            name: feature.name.to_string(),
-            kind: FeatureKind::Lib,
-            since: feature.since.map(|s| s.as_str().parse().unwrap()),
-        }
+        // Do nothing.
     }
 }
 
 pub struct StabilityCollector<'tcx> {
     tcx: TyCtxt<'tcx>,
-    features: HashSet<LibFeature>,
+    features: HashSet<Stability>,
 }
 
 impl<'tcx> StabilityCollector<'tcx> {
@@ -101,7 +89,7 @@ impl<'tcx> StabilityCollector<'tcx> {
         }
     }
 
-    pub fn collect_features(self) -> Vec<Feature> {
+    pub fn into_features(self) -> Vec<Feature> {
         self.features.into_iter().map(Into::into).collect()
     }
 
@@ -110,32 +98,14 @@ impl<'tcx> StabilityCollector<'tcx> {
             return;
         }
 
-        let stability = self.tcx.lookup_stability(def_id);
-        match stability {
-            Some(&Stability {
-                level: attr::Unstable { .. },
-                feature,
-                ..
-            }) => {
-                // ignore internal features
-                if !span.allows_unstable(feature) {
-                    self.features.insert(LibFeature {
-                        name: feature,
-                        since: None,
-                    });
+        if let Some(stab) = self.tcx.lookup_stability(def_id) {
+            if let attr::Unstable { .. } = stab.level {
+                if span.allows_unstable(stab.feature) {
+                    return;
                 }
             }
-            Some(&Stability {
-                level: attr::Stable { since },
-                feature,
-                ..
-            }) => {
-                self.features.insert(LibFeature {
-                    name: feature,
-                    since: Some(since),
-                });
-            }
-            _ => {}
+
+            self.features.insert(*stab);
         }
     }
 }
@@ -154,6 +124,64 @@ impl<'tcx> intravisit::Visitor<'tcx> for StabilityCollector<'tcx> {
         if let Some(def_id) = path.res.opt_def_id() {
             self.process_stability(def_id, path.span);
         }
+
         intravisit::walk_path(self, path);
     }
+}
+
+// TODO: improve this. We need to check stability attributes for unexpanded macros; after parsing
+// we have the invocation but not the definition and the resolver is not available, and after
+// expansion we have the resolver but not the invocation. Luckily, the session stores info about
+// imported macros (only used by the RLS), but we lose the context of which invocations triggered
+// which expansions.
+// In this function we are able to fetch the stability attributes from those macros, but without
+// context we can't correctly evaluate the #[allow_internal_unstable] attribute in case where one
+// macro uses another macro with that attribute. As a workaround, we check all unstable features
+// against all the allowed unstable attributes, which is OKish for our use case, but not correct.
+// There's probable a better solution. This is not over!!
+pub fn process_imported_macros(session: &Session, resolver: &mut Resolver) -> Vec<Feature> {
+    // Resolve again all of the imported macros. This gives us access to the stability attributes.
+    let resolved = session
+        .imported_macro_spans
+        .borrow()
+        .iter()
+        .filter_map(|(_, (name, _))| {
+            let path = ast::Path::from_ident(Ident::from_str(name));
+            let result = resolver.resolve_macro_path(
+                &path,
+                None,
+                &ParentScope::module(resolver.graph_root()),
+                false,
+                false,
+            );
+            match result {
+                Ok((ext, ..)) => ext,
+                _ => None,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    // Collect all of the allowed unstable features. See the comment above.
+    let allowed_unstable = resolved
+        .iter()
+        .flat_map(|ext| ext.allow_internal_unstable.as_ref())
+        .map(|list| list.iter().cloned())
+        .flatten()
+        .collect::<Vec<_>>();
+
+    // Transform and dedup features that are stable or unstable and not allowed.
+    let features = resolved
+        .into_iter()
+        .flat_map(|ext| ext.stability)
+        .filter(|stab| match stab {
+            Stability {
+                level: StabilityLevel::Stable { .. },
+                ..
+            } => true,
+            Stability { feature, .. } => !allowed_unstable.iter().any(|allowed| feature == allowed),
+        })
+        .collect::<HashSet<_>>();
+
+    // Map into our feature representation.
+    features.into_iter().map(Into::into).collect::<Vec<_>>()
 }
