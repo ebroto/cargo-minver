@@ -27,10 +27,7 @@ impl Server {
             .spawn(|| Server::serve(listener))
             .context("error serving")?;
 
-        Ok(Self {
-            address,
-            join_handle,
-        })
+        Ok(Self { address, join_handle })
     }
 
     fn serve(listener: TcpListener) -> Result<Vec<CrateAnalysis>> {
@@ -41,10 +38,10 @@ impl Server {
             match message {
                 Message::Analysis(analysis) => {
                     data.push(analysis);
-                }
+                },
                 Message::Collect => {
                     break;
-                }
+                },
             }
         }
         Ok(data)

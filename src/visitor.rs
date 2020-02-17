@@ -43,8 +43,8 @@ impl<'a> visit::Visitor<'a> for PostExpansionVisitor {
         match e.kind {
             ast::ExprKind::Range(_, _, ast::RangeLimits::Closed) => {
                 self.features.insert(sym::inclusive_range_syntax);
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         visit::walk_expr(self, e);
@@ -56,17 +56,22 @@ impl<'a> visit::Visitor<'a> for PostExpansionVisitor {
         }
 
         match &pattern.kind {
-            #[rustfmt::skip]
-            PatKind::Range(.., Spanned { node: RangeEnd::Included(RangeSyntax::DotDotEq), ..}) => {
+            PatKind::Range(
+                ..,
+                Spanned {
+                    node: RangeEnd::Included(RangeSyntax::DotDotEq),
+                    ..
+                },
+            ) => {
                 self.features.insert(sym::dotdoteq_in_patterns);
-            }
+            },
             PatKind::Tuple(ps) if has_rest(ps) => {
                 self.features.insert(sym::dotdot_in_tuple_patterns);
-            }
+            },
             PatKind::TupleStruct(_, ps) if ps.len() > 1 && has_rest(ps) => {
                 self.features.insert(sym::dotdot_in_tuple_patterns);
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         visit::walk_pat(self, pattern);
@@ -136,7 +141,7 @@ impl<'tcx> intravisit::Visitor<'tcx> for StabilityCollector<'tcx> {
                     index: CRATE_DEF_INDEX,
                 };
                 self.process_stability(def_id, item.span);
-            }
+            },
 
             hir::ItemKind::Impl {
                 of_trait: Some(ref t),
@@ -156,9 +161,9 @@ impl<'tcx> intravisit::Visitor<'tcx> for StabilityCollector<'tcx> {
                         }
                     }
                 }
-            }
+            },
 
-            _ => {}
+            _ => {},
         }
 
         intravisit::walk_item(self, item);
@@ -191,13 +196,8 @@ pub fn process_imported_macros(session: &Session, resolver: &mut Resolver) -> Ve
         .iter()
         .filter_map(|(_, (name, _))| {
             let path = ast::Path::from_ident(Ident::from_str(name));
-            let result = resolver.resolve_macro_path(
-                &path,
-                None,
-                &ParentScope::module(resolver.graph_root()),
-                false,
-                false,
-            );
+            let result =
+                resolver.resolve_macro_path(&path, None, &ParentScope::module(resolver.graph_root()), false, false);
             match result {
                 Ok((ext, ..)) => ext,
                 _ => None,

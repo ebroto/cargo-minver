@@ -1,0 +1,10 @@
+version = "Two"
+edition = "2018"
+max_width = 120
+comment_width = 100
+error_on_line_overflow = true
+condense_wildcard_suffixes = true
+reorder_impl_items = true
+use_field_init_shorthand = true
+match_block_trailing_comma = true
+wrap_comments = true

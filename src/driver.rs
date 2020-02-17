@@ -15,11 +15,7 @@ struct MinverCallbacks {
 }
 
 impl Callbacks for MinverCallbacks {
-    fn after_expansion<'tcx>(
-        &mut self,
-        compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
-    ) -> Compilation {
+    fn after_expansion<'tcx>(&mut self, compiler: &Compiler, queries: &'tcx Queries<'tcx>) -> Compilation {
         let session = compiler.session();
         session.abort_if_errors();
 
@@ -36,11 +32,7 @@ impl Callbacks for MinverCallbacks {
         Compilation::Continue
     }
 
-    fn after_analysis<'tcx>(
-        &mut self,
-        compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
-    ) -> Compilation {
+    fn after_analysis<'tcx>(&mut self, compiler: &Compiler, queries: &'tcx Queries<'tcx>) -> Compilation {
         compiler.session().abort_if_errors();
 
         self.analysis.name = queries.crate_name().unwrap().peek().clone();
@@ -60,9 +52,7 @@ pub fn run_compiler(args: &[String]) -> Result<CrateAnalysis> {
     let mut callbacks = MinverCallbacks::default();
 
     // NOTE: The error returned from the driver was already displayed.
-    rustc_driver::catch_fatal_errors(|| {
-        rustc_driver::run_compiler(args, &mut callbacks, None, None)
-    })
-    .map(|_| callbacks.analysis)
-    .map_err(|_| format_err!("compiler errored out"))
+    rustc_driver::catch_fatal_errors(|| rustc_driver::run_compiler(args, &mut callbacks, None, None))
+        .map(|_| callbacks.analysis)
+        .map_err(|_| format_err!("compiler errored out"))
 }

@@ -44,9 +44,10 @@ fn main() -> Result<()> {
 }
 
 fn is_compiler_wrapper<P: AsRef<Path>>(current_exe: P) -> bool {
-    current_exe.as_ref().to_str().map_or(false, |p| {
-        env::var(WRAPPER_ENV).map_or(false, |v| v.contains(p))
-    })
+    current_exe
+        .as_ref()
+        .to_str()
+        .map_or(false, |p| env::var(WRAPPER_ENV).map_or(false, |v| v.contains(p)))
 }
 
 fn run_as_compiler_wrapper() -> Result<()> {
@@ -79,9 +80,7 @@ fn run_as_compiler_wrapper() -> Result<()> {
 
 // TODO: check if we really need the more complex approaches
 fn fetch_sysroot() -> Result<String> {
-    let output = Command::new("rustc")
-        .args(vec!["--print", "sysroot"])
-        .output()?;
+    let output = Command::new("rustc").args(vec!["--print", "sysroot"]).output()?;
 
     let sysroot = str::from_utf8(&output.stdout)?;
     Ok(sysroot.trim_end().to_string())
@@ -116,19 +115,12 @@ fn run_as_cargo_subcommand<P: AsRef<Path>>(current_exe: P) -> Result<()> {
     let server = Server::new(address).context("could not start server")?;
 
     // Run `cargo check` to build all the crates.
-    cargo_check(current_exe.as_ref(), options.server_port)
-        .context("failed to execute cargo check")?;
+    cargo_check(current_exe.as_ref(), options.server_port).context("failed to execute cargo check")?;
 
     // Process the results of the analysis.
-    let analysis = server
-        .collect()
-        .context("failed to retrieve analysis result")?;
+    let analysis = server.collect().context("failed to retrieve analysis result")?;
 
-    let mut features = analysis
-        .iter()
-        .map(|a| &a.features)
-        .flatten()
-        .collect::<Vec<_>>();
+    let mut features = analysis.iter().map(|a| &a.features).flatten().collect::<Vec<_>>();
 
     features.sort_unstable_by(|a, b| {
         if a.since != b.since {
