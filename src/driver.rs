@@ -1,5 +1,6 @@
+use rustc::ty;
 use rustc_driver::{Callbacks, Compilation};
-use rustc_hir::intravisit;
+use rustc_hir::intravisit::Visitor;
 use rustc_interface::interface::Compiler;
 use rustc_interface::Queries;
 use syntax::visit;
@@ -37,10 +38,9 @@ impl Callbacks for MinverCallbacks {
 
         self.analysis.name = queries.crate_name().unwrap().peek().clone();
         queries.global_ctxt().unwrap().peek_mut().enter(|tcx| {
-            let krate = tcx.hir().krate();
-            let mut visitor = StabilityCollector::new(tcx);
-            intravisit::walk_crate(&mut visitor, krate);
-
+            let empty_tables = ty::TypeckTables::empty(None);
+            let mut visitor = StabilityCollector::new(tcx, &empty_tables);
+            tcx.hir().krate().visit_all_item_likes(&mut visitor.as_deep_visitor());
             self.analysis.features.extend(visitor.into_features());
         });
 

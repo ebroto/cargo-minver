@@ -1,5 +1,5 @@
 use rustc::hir::map::Map;
-use rustc::ty::TyCtxt;
+use rustc::ty::{self, TyCtxt};
 use rustc_attr::{self as attr, Stability, StabilityLevel};
 use rustc_feature::ACCEPTED_FEATURES;
 use rustc_hir as hir;
@@ -9,13 +9,14 @@ use rustc_hir::intravisit::{self, NestedVisitorMap};
 use rustc_resolve::{ParentScope, Resolver};
 use rustc_session::Session;
 use rustc_span::source_map::Spanned;
-use rustc_span::symbol::{sym, Symbol};
+use rustc_span::symbol::{self, sym, Symbol};
 use rustc_span::Span;
 use syntax::ast::{self, Ident, Pat, PatKind, RangeEnd, RangeSyntax};
 use syntax::ptr::P;
 use syntax::visit;
 
 use std::collections::HashSet;
+use std::mem;
 
 use crate::feature::Feature;
 
@@ -56,13 +57,8 @@ impl<'a> visit::Visitor<'a> for PostExpansionVisitor {
         }
 
         match &pattern.kind {
-            PatKind::Range(
-                ..,
-                Spanned {
-                    node: RangeEnd::Included(RangeSyntax::DotDotEq),
-                    ..
-                },
-            ) => {
+            #[rustfmt::skip]
+            PatKind::Range(.., Spanned { node: RangeEnd::Included(RangeSyntax::DotDotEq), .. }) => {
                 self.features.insert(sym::dotdoteq_in_patterns);
             },
             PatKind::Tuple(ps) if has_rest(ps) => {
@@ -82,16 +78,20 @@ impl<'a> visit::Visitor<'a> for PostExpansionVisitor {
     }
 }
 
-pub struct StabilityCollector<'tcx> {
+pub struct StabilityCollector<'a, 'tcx> {
     tcx: TyCtxt<'tcx>,
     features: HashSet<Stability>,
+    tables: &'a ty::TypeckTables<'tcx>,
+    empty_tables: &'a ty::TypeckTables<'tcx>,
 }
 
-impl<'tcx> StabilityCollector<'tcx> {
-    pub fn new(tcx: TyCtxt<'tcx>) -> Self {
+impl<'a, 'tcx> StabilityCollector<'a, 'tcx> {
+    pub fn new(tcx: TyCtxt<'tcx>, empty_tables: &'a ty::TypeckTables<'tcx>) -> Self {
         StabilityCollector {
             tcx,
             features: HashSet::new(),
+            tables: empty_tables,
+            empty_tables,
         }
     }
 
@@ -105,23 +105,39 @@ impl<'tcx> StabilityCollector<'tcx> {
         }
 
         if let Some(stab) = self.tcx.lookup_stability(def_id) {
-            if let attr::Unstable { .. } = stab.level {
-                if span.allows_unstable(stab.feature) {
-                    return;
-                }
+            dbg!(&def_id);
+            match stab.level {
+                attr::Unstable { .. } if span.allows_unstable(stab.feature) => {},
+                _ => {
+                    self.features.insert(*stab);
+                },
             }
-
-            self.features.insert(*stab);
         }
+    }
+
+    fn with_item_tables<F>(&mut self, hir_id: hir::HirId, f: F)
+    where
+        F: FnOnce(&mut Self),
+    {
+        let def_id = self.tcx.hir().local_def_id(hir_id);
+        let tables = if self.tcx.has_typeck_tables(def_id) {
+            self.tcx.typeck_tables_of(def_id)
+        } else {
+            self.empty_tables
+        };
+
+        let old_tables = mem::replace(&mut self.tables, tables);
+        f(self);
+        self.tables = old_tables;
     }
 }
 
-// TODO: see if the rest of stability checks can be done here.
-impl<'tcx> intravisit::Visitor<'tcx> for StabilityCollector<'tcx> {
+// TODO: do the rest of lib stability checks here.
+impl<'a, 'tcx> intravisit::Visitor<'tcx> for StabilityCollector<'a, 'tcx> {
     type Map = Map<'tcx>;
 
     fn nested_visit_map(&mut self) -> intravisit::NestedVisitorMap<'_, Self::Map> {
-        NestedVisitorMap::All(&self.tcx.hir())
+        NestedVisitorMap::OnlyBodies(&self.tcx.hir())
     }
 
     fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) {
@@ -166,7 +182,61 @@ impl<'tcx> intravisit::Visitor<'tcx> for StabilityCollector<'tcx> {
             _ => {},
         }
 
-        intravisit::walk_item(self, item);
+        self.with_item_tables(item.hir_id, |v| {
+            intravisit::walk_item(v, item);
+        });
+    }
+
+    fn visit_impl_item(&mut self, impl_item: &'tcx hir::ImplItem<'tcx>) {
+        self.with_item_tables(impl_item.hir_id, |v| {
+            intravisit::walk_impl_item(v, impl_item);
+        })
+    }
+
+    fn visit_trait_item(&mut self, trait_item: &'tcx hir::TraitItem<'tcx>) {
+        self.with_item_tables(trait_item.hir_id, |v| {
+            intravisit::walk_trait_item(v, trait_item);
+        })
+    }
+
+    fn visit_expr(&mut self, expr: &'tcx hir::Expr<'tcx>) {
+        fn process_fields<'tcx>(v: &mut StabilityCollector, expr: &'tcx hir::Expr<'tcx>, idents: &[symbol::Ident]) {
+            if let Some(expr_ty) = v.tables.expr_ty_adjusted_opt(expr) {
+                match expr_ty.kind {
+                    ty::Adt(def, _) if !def.is_enum() => {
+                        let variant = def.non_enum_variant();
+                        for ident in idents {
+                            if let Some(ty_field) = v
+                                .tcx
+                                .find_field_index(*ident, variant)
+                                .map(|index| &variant.fields[index])
+                            {
+                                v.process_stability(ty_field.did, expr.span);
+                            }
+                        }
+                    },
+                    _ => {},
+                }
+            }
+        }
+
+        match expr.kind {
+            hir::ExprKind::MethodCall(..) => {
+                if let Some(def_id) = self.tables.type_dependent_def_id(expr.hir_id) {
+                    self.process_stability(def_id, expr.span);
+                }
+            },
+            hir::ExprKind::Field(subexpr, ident) => {
+                process_fields(self, subexpr, &[ident]);
+            },
+            hir::ExprKind::Struct(_, fields, _) => {
+                let idents = fields.iter().map(|f| f.ident).collect::<Vec<_>>();
+                process_fields(self, expr, &idents);
+            },
+            _ => {},
+        }
+
+        intravisit::walk_expr(self, expr);
     }
 
     fn visit_path(&mut self, path: &'tcx hir::Path<'tcx>, _id: hir::HirId) {
@@ -175,6 +245,17 @@ impl<'tcx> intravisit::Visitor<'tcx> for StabilityCollector<'tcx> {
         }
 
         intravisit::walk_path(self, path);
+    }
+
+    fn visit_qpath(&mut self, qpath: &'tcx hir::QPath<'tcx>, id: hir::HirId, span: Span) {
+        // NOTE: QPath::Resolved will be checked when visiting its inner path
+        if let hir::QPath::TypeRelative(..) = qpath {
+            if let Some(def_id) = self.tables.qpath_res(qpath, id).opt_def_id() {
+                self.process_stability(def_id, span);
+            }
+        }
+
+        intravisit::walk_qpath(self, qpath, id, span);
     }
 }
 
