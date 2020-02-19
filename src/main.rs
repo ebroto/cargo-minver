@@ -136,10 +136,7 @@ fn run_as_cargo_subcommand<P: AsRef<Path>>(current_exe: P) -> Result<()> {
 }
 
 fn cargo_clean() -> Result<()> {
-    let exit_status = Command::new("cargo") //
-        .arg("clean")
-        .spawn()?
-        .wait()?;
+    let exit_status = Command::new("cargo").arg("clean").spawn()?.wait()?;
     if !exit_status.success() {
         bail!("process returned error exit status")
     }

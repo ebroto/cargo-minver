@@ -22,7 +22,7 @@ pub struct Server {
 impl Server {
     pub fn new(address: SocketAddr) -> Result<Self> {
         let listener = TcpListener::bind(address).context("could not bind to local address")?;
-        let join_handle = thread::Builder::new()
+        let join_handle = thread::Builder::new() //
             .name("server".into())
             .spawn(|| Server::serve(listener))
             .context("error serving")?;
