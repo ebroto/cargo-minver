@@ -6,6 +6,7 @@ use rustc_hir as hir;
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX};
 use rustc_hir::intravisit::{self, NestedVisitorMap};
+use rustc_hir::pat_util::EnumerateAndAdjustIterator;
 use rustc_resolve::{ParentScope, Resolver};
 use rustc_session::Session;
 use rustc_span::source_map::Spanned;
@@ -115,6 +116,24 @@ impl<'a, 'tcx> StabilityCollector<'a, 'tcx> {
         }
     }
 
+    fn process_fields(&mut self, ty_kind: &ty::TyKind, fields: &[(symbol::Ident, Span)]) {
+        match ty_kind {
+            ty::Adt(def, _) if !def.is_enum() => {
+                let variant = def.non_enum_variant();
+                for (ident, span) in fields {
+                    if let Some(ty_field) = self
+                        .tcx
+                        .find_field_index(*ident, variant)
+                        .map(|index| &variant.fields[index])
+                    {
+                        self.process_stability(ty_field.did, *span);
+                    }
+                }
+            },
+            _ => {},
+        }
+    }
+
     fn with_item_tables<F>(&mut self, hir_id: hir::HirId, f: F)
     where
         F: FnOnce(&mut Self),
@@ -199,27 +218,34 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for StabilityCollector<'a, 'tcx> {
         })
     }
 
-    fn visit_expr(&mut self, expr: &'tcx hir::Expr<'tcx>) {
-        fn process_fields<'tcx>(v: &mut StabilityCollector, expr: &'tcx hir::Expr<'tcx>, idents: &[symbol::Ident]) {
-            if let Some(expr_ty) = v.tables.expr_ty_adjusted_opt(expr) {
-                match expr_ty.kind {
-                    ty::Adt(def, _) if !def.is_enum() => {
-                        let variant = def.non_enum_variant();
-                        for ident in idents {
-                            if let Some(ty_field) = v
-                                .tcx
-                                .find_field_index(*ident, variant)
-                                .map(|index| &variant.fields[index])
-                            {
-                                v.process_stability(ty_field.did, expr.span);
-                            }
-                        }
-                    },
-                    _ => {},
+    fn visit_pat(&mut self, pat: &'tcx hir::Pat<'tcx>) {
+        match pat.kind {
+            hir::PatKind::Struct(_, fields, _) => {
+                if let Some(pat_ty) = self.tables.pat_ty_opt(pat) {
+                    let fields = fields.iter().map(|f| (f.ident, f.span)).collect::<Vec<_>>();
+                    self.process_fields(&pat_ty.kind, &fields);
                 }
-            }
+            },
+            hir::PatKind::TupleStruct(_, subpats, ddpos) => {
+                if let Some(pat_ty) = self.tables.pat_ty_opt(pat) {
+                    match pat_ty.kind {
+                        ty::Adt(def, _) if !def.is_enum() => {
+                            let variant = def.non_enum_variant();
+                            for (i, subpat) in subpats.iter().enumerate_and_adjust(variant.fields.len(), ddpos) {
+                                self.process_stability(variant.fields[i].did, subpat.span);
+                            }
+                        },
+                        _ => {},
+                    }
+                }
+            },
+            _ => {},
         }
 
+        intravisit::walk_pat(self, pat);
+    }
+
+    fn visit_expr(&mut self, expr: &'tcx hir::Expr<'tcx>) {
         match expr.kind {
             hir::ExprKind::MethodCall(..) => {
                 if let Some(def_id) = self.tables.type_dependent_def_id(expr.hir_id) {
@@ -227,11 +253,15 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for StabilityCollector<'a, 'tcx> {
                 }
             },
             hir::ExprKind::Field(subexpr, ident) => {
-                process_fields(self, subexpr, &[ident]);
+                if let Some(expr_ty) = self.tables.expr_ty_adjusted_opt(subexpr) {
+                    self.process_fields(&expr_ty.kind, &[(ident, subexpr.span)]);
+                }
             },
             hir::ExprKind::Struct(_, fields, _) => {
-                let idents = fields.iter().map(|f| f.ident).collect::<Vec<_>>();
-                process_fields(self, expr, &idents);
+                if let Some(expr_ty) = self.tables.expr_ty_adjusted_opt(expr) {
+                    let idents = fields.iter().map(|f| (f.ident, f.span)).collect::<Vec<_>>();
+                    self.process_fields(&expr_ty.kind, &idents);
+                }
             },
             _ => {},
         }
