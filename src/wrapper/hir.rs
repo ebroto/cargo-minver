@@ -125,7 +125,8 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
                         let trait_item_def_id = self
                             .tcx
                             .associated_items(trait_did)
-                            .find(|item| item.ident.name == impl_item.ident.name)
+                            .filter_by_name_unhygienic(impl_item.ident.name)
+                            .next()
                             .map(|item| item.def_id);
                         if let Some(def_id) = trait_item_def_id {
                             self.process_stability(def_id, impl_item.span);

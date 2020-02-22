@@ -15,7 +15,7 @@ enum Cargo {
 #[derive(Debug, StructOpt)]
 struct Options {
     /// The port used by the local server.
-    #[structopt(short, long, default_value = "64221")]
+    #[structopt(short, long, name = "port", default_value = "64221")]
     server_port: u16,
 }
 
