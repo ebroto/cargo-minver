@@ -5,7 +5,7 @@ use std::{env, str};
 use anyhow::{bail, Context, Result};
 use structopt::StructOpt;
 
-use cargo_minver::ipc::{self, Server};
+use cargo_minver::ipc::Server;
 use cargo_minver::SERVER_PORT_ENV;
 
 // TODO: move stuff to lib.rs, leave the minimum here
@@ -35,8 +35,7 @@ fn main() -> Result<()> {
 
     // Start a server that will receive the results of the analysis of each crate.
     let Cargo::Minver(options) = Cargo::from_args();
-    let address = ipc::server_address(options.server_port);
-    let server = Server::new(address).context("could not start server")?;
+    let server = Server::new(options.server_port).context("could not start server")?;
 
     // Run `cargo check` to build all the crates.
     let wrapper_path = path_to_wrapper().context("could not find compiler wrapper")?;

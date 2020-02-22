@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpListener, TcpStream};
+use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::thread::{self, JoinHandle};
 
 use anyhow::{Context, Result};
@@ -15,19 +15,20 @@ pub enum Message {
 
 #[derive(Debug)]
 pub struct Server {
-    address: SocketAddr,
+    port: u16,
     join_handle: JoinHandle<Result<Vec<CrateAnalysis>>>,
 }
 
 impl Server {
-    pub fn new(address: SocketAddr) -> Result<Self> {
+    pub fn new(port: u16) -> Result<Self> {
+        let address = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
         let listener = TcpListener::bind(address).context("could not bind to local address")?;
         let join_handle = thread::Builder::new() //
             .name("server".into())
             .spawn(|| Server::serve(listener))
             .context("error serving")?;
 
-        Ok(Self { address, join_handle })
+        Ok(Self { port, join_handle })
     }
 
     fn serve(listener: TcpListener) -> Result<Vec<CrateAnalysis>> {
@@ -48,18 +49,15 @@ impl Server {
     }
 
     pub fn collect(self) -> Result<Vec<CrateAnalysis>> {
-        send_message(self.address, &Message::Collect).context("could not stop server")?;
+        send_message(self.port, &Message::Collect).context("could not stop server")?;
         self.join_handle.join().unwrap()
     }
 }
 
-pub fn send_message(addr: SocketAddr, message: &Message) -> Result<()> {
+pub fn send_message(port: u16, message: &Message) -> Result<()> {
+    let address = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+    let mut stream = TcpStream::connect(address)?;
     let buffer = bincode::serialize(&message)?;
-    let mut stream = TcpStream::connect(addr)?;
     stream.write_all(&buffer)?;
     Ok(())
-}
-
-pub fn server_address(port: u16) -> SocketAddr {
-    SocketAddrV4::new(Ipv4Addr::LOCALHOST, port).into()
 }

@@ -26,10 +26,10 @@ fn main() -> Result<()> {
         ]);
         let analysis = wrapper::run_compiler(&args)?;
 
+        // Send the results to the server.
         let port = server_port_from_env().context("invalid server port in environment")?;
-        let address = ipc::server_address(port);
-        let message = ipc::Message::Analysis(analysis);
-        ipc::send_message(address, &message).context("failed to send analysis result to server")?;
+        ipc::send_message(port, &ipc::Message::Analysis(analysis))
+            .context("failed to send analysis result to server")?;
         Ok(())
     }
 }
