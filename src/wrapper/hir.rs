@@ -1,94 +1,30 @@
 use rustc::hir::map::Map;
 use rustc::ty::{self, TyCtxt};
-use rustc_attr::{self as attr, Stability, StabilityLevel};
-use rustc_feature::ACCEPTED_FEATURES;
+use rustc_attr as attr;
+use rustc_attr::Stability;
 use rustc_hir as hir;
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX};
 use rustc_hir::intravisit::{self, NestedVisitorMap};
 use rustc_hir::pat_util::EnumerateAndAdjustIterator;
-use rustc_resolve::{ParentScope, Resolver};
-use rustc_session::Session;
-use rustc_span::source_map::Spanned;
-use rustc_span::symbol::{self, sym, Symbol};
+use rustc_span::symbol::Ident;
 use rustc_span::Span;
-use syntax::ast::{self, Ident, Pat, PatKind, RangeEnd, RangeSyntax};
-use syntax::ptr::P;
-use syntax::visit;
 
 use std::collections::HashSet;
 use std::mem;
 
 use crate::feature::Feature;
 
-// TODO: stability module, separate visitors in different file(s)?
-
-#[derive(Debug, Default)]
-pub struct PostExpansionVisitor {
-    features: HashSet<Symbol>,
-}
-
-impl PostExpansionVisitor {
-    pub fn into_features(self) -> Vec<Feature> {
-        self.features
-            .into_iter()
-            .flat_map(|name| ACCEPTED_FEATURES.iter().find(|f| f.name == name))
-            .map(Into::into)
-            .collect()
-    }
-}
-
-impl<'a> visit::Visitor<'a> for PostExpansionVisitor {
-    // TODO: add missing lang features
-    fn visit_expr(&mut self, e: &'a ast::Expr) {
-        #[allow(clippy::single_match)]
-        match e.kind {
-            ast::ExprKind::Range(_, _, ast::RangeLimits::Closed) => {
-                self.features.insert(sym::inclusive_range_syntax);
-            },
-            _ => {},
-        }
-
-        visit::walk_expr(self, e);
-    }
-
-    fn visit_pat(&mut self, pattern: &'a ast::Pat) {
-        fn has_rest(ps: &[P<Pat>]) -> bool {
-            ps.iter().any(|p| p.is_rest())
-        }
-
-        match &pattern.kind {
-            #[rustfmt::skip]
-            PatKind::Range(.., Spanned { node: RangeEnd::Included(RangeSyntax::DotDotEq), .. }) => {
-                self.features.insert(sym::dotdoteq_in_patterns);
-            },
-            PatKind::Tuple(ps) if has_rest(ps) => {
-                self.features.insert(sym::dotdot_in_tuple_patterns);
-            },
-            PatKind::TupleStruct(_, ps) if ps.len() > 1 && has_rest(ps) => {
-                self.features.insert(sym::dotdot_in_tuple_patterns);
-            },
-            _ => {},
-        }
-
-        visit::walk_pat(self, pattern);
-    }
-
-    fn visit_mac(&mut self, _mac: &ast::Mac) {
-        // Do nothing.
-    }
-}
-
-pub struct StabilityCollector<'a, 'tcx> {
+pub struct Visitor<'a, 'tcx> {
     tcx: TyCtxt<'tcx>,
     features: HashSet<Stability>,
     tables: &'a ty::TypeckTables<'tcx>,
     empty_tables: &'a ty::TypeckTables<'tcx>,
 }
 
-impl<'a, 'tcx> StabilityCollector<'a, 'tcx> {
+impl<'a, 'tcx> Visitor<'a, 'tcx> {
     pub fn new(tcx: TyCtxt<'tcx>, empty_tables: &'a ty::TypeckTables<'tcx>) -> Self {
-        StabilityCollector {
+        Visitor {
             tcx,
             features: HashSet::new(),
             tables: empty_tables,
@@ -116,7 +52,7 @@ impl<'a, 'tcx> StabilityCollector<'a, 'tcx> {
         }
     }
 
-    fn process_fields(&mut self, ty_kind: &ty::TyKind, fields: &[(symbol::Ident, Span)]) {
+    fn process_fields(&mut self, ty_kind: &ty::TyKind, fields: &[(Ident, Span)]) {
         match ty_kind {
             ty::Adt(def, _) if !def.is_enum() => {
                 let variant = def.non_enum_variant();
@@ -152,10 +88,10 @@ impl<'a, 'tcx> StabilityCollector<'a, 'tcx> {
 }
 
 // TODO: do the rest of lib stability checks here.
-impl<'a, 'tcx> intravisit::Visitor<'tcx> for StabilityCollector<'a, 'tcx> {
+impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
     type Map = Map<'tcx>;
 
-    fn nested_visit_map(&mut self) -> intravisit::NestedVisitorMap<'_, Self::Map> {
+    fn nested_visit_map(&mut self) -> NestedVisitorMap<'_, Self::Map> {
         NestedVisitorMap::OnlyBodies(&self.tcx.hir())
     }
 
@@ -289,54 +225,12 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for StabilityCollector<'a, 'tcx> {
     }
 }
 
-// TODO: improve this. We need to check stability attributes for unexpanded macros; after parsing
-// we have the invocation but not the definition and the resolver is not available, and after
-// expansion we have the resolver but not the invocation. Luckily, the session stores info about
-// imported macros (only used by the RLS), but we lose the context of which invocations triggered
-// which expansions.
-// In this function we are able to fetch the stability attributes from those macros, but without
-// context we can't correctly evaluate the #[allow_internal_unstable] attribute in case where one
-// macro uses another macro with that attribute. As a workaround, we check all unstable features
-// against all the allowed unstable attributes, which is OKish for our use case, but not correct.
-// There's probable a better solution. This is not over!!
-pub fn process_imported_macros(session: &Session, resolver: &mut Resolver) -> Vec<Feature> {
-    // Resolve again all of the imported macros. This gives us access to the stability attributes.
-    let resolved = session
-        .imported_macro_spans
-        .borrow()
-        .iter()
-        .filter_map(|(_, (name, _))| {
-            let path = ast::Path::from_ident(Ident::from_str(name));
-            let result =
-                resolver.resolve_macro_path(&path, None, &ParentScope::module(resolver.graph_root()), false, false);
-            match result {
-                Ok((ext, ..)) => ext,
-                _ => None,
-            }
-        })
-        .collect::<Vec<_>>();
+pub fn walk_crate<'tcx>(tcx: TyCtxt<'tcx>) -> Vec<Feature> {
+    use intravisit::Visitor as _;
 
-    // Collect all of the allowed unstable features. See the comment above.
-    let allowed_unstable = resolved
-        .iter()
-        .flat_map(|ext| ext.allow_internal_unstable.as_ref())
-        .map(|list| list.iter().cloned())
-        .flatten()
-        .collect::<Vec<_>>();
+    let empty_tables = ty::TypeckTables::empty(None);
+    let mut visitor = Visitor::new(tcx, &empty_tables);
+    tcx.hir().krate().visit_all_item_likes(&mut visitor.as_deep_visitor());
 
-    // Transform and dedup features that are stable or unstable and not allowed.
-    let features = resolved
-        .into_iter()
-        .flat_map(|ext| ext.stability)
-        .filter(|stab| match stab {
-            Stability {
-                level: StabilityLevel::Stable { .. },
-                ..
-            } => true,
-            Stability { feature, .. } => !allowed_unstable.iter().any(|allowed| feature == allowed),
-        })
-        .collect::<HashSet<_>>();
-
-    // Map into our feature representation.
-    features.into_iter().map(Into::into).collect::<Vec<_>>()
+    visitor.into_features()
 }

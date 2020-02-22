@@ -15,10 +15,10 @@ extern crate syntax;
 
 mod driver;
 mod feature;
-pub mod ipc;
-mod visitor;
-pub mod wrapper;
+mod ipc;
+mod wrapper;
 
-pub const SERVER_PORT_ENV: &str = "MINVER_SERVER_PORT";
+const SERVER_PORT_ENV: &str = "MINVER_SERVER_PORT";
 
 pub use driver::Driver;
+pub use wrapper::run as run_as_compiler_wrapper;
