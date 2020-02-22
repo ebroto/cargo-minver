@@ -1,21 +1,3 @@
-#![feature(rustc_private)]
-
-extern crate rustc;
-extern crate rustc_attr;
-extern crate rustc_driver;
-extern crate rustc_feature;
-extern crate rustc_hir;
-extern crate rustc_interface;
-extern crate rustc_resolve;
-extern crate rustc_session;
-extern crate rustc_span;
-extern crate syntax;
-
-mod driver;
-mod feature;
-mod ipc;
-mod visitor;
-
 use std::env;
 use std::path::Path;
 use std::process::Command;
@@ -24,7 +6,8 @@ use std::str;
 use anyhow::{bail, Context, Result};
 use structopt::StructOpt;
 
-use crate::ipc::Server;
+use cargo_minver::ipc::{self, Server};
+use cargo_minver::wrapper;
 
 // TODO: move stuff to lib.rs, leave the minimum here
 // TODO: pin to specific nightly
@@ -63,12 +46,12 @@ fn run_as_compiler_wrapper() -> Result<()> {
             .context("failed to execute rustc")?;
         Ok(())
     } else {
-        // Cargo is building a crate: run the compiler using our driver.
+        // Cargo is building a crate: run the compiler using our wrapper.
         args.extend(vec![
             "--sysroot".to_string(),
             fetch_sysroot().context("could not fetch sysroot")?,
         ]);
-        let analysis = driver::run_compiler(&args)?;
+        let analysis = wrapper::run_compiler(&args)?;
 
         let port = server_port_from_env().context("invalid server port in environment")?;
         let address = ipc::server_address(port);
@@ -81,7 +64,6 @@ fn run_as_compiler_wrapper() -> Result<()> {
 // TODO: check if we really need the more complex approaches
 fn fetch_sysroot() -> Result<String> {
     let output = Command::new("rustc").args(vec!["--print", "sysroot"]).output()?;
-
     let sysroot = str::from_utf8(&output.stdout)?;
     Ok(sysroot.trim_end().to_string())
 }
