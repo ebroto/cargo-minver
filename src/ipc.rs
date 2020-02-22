@@ -5,18 +5,18 @@ use std::thread::{self, JoinHandle};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::feature::CrateAnalysis;
+use crate::feature::{Analysis, CrateAnalysis};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Message {
-    Analysis(CrateAnalysis),
+    AnalysisResult(CrateAnalysis),
     Collect,
 }
 
 #[derive(Debug)]
 pub struct Server {
     port: u16,
-    join_handle: JoinHandle<Result<Vec<CrateAnalysis>>>,
+    join_handle: JoinHandle<Result<Analysis>>,
 }
 
 impl Server {
@@ -31,13 +31,13 @@ impl Server {
         Ok(Self { port, join_handle })
     }
 
-    fn serve(listener: TcpListener) -> Result<Vec<CrateAnalysis>> {
+    fn serve(listener: TcpListener) -> Result<Analysis> {
         let mut data = Vec::new();
         for stream in listener.incoming() {
             let stream = stream?;
             let message = bincode::deserialize_from(&stream)?;
             match message {
-                Message::Analysis(analysis) => {
+                Message::AnalysisResult(analysis) => {
                     data.push(analysis);
                 },
                 Message::Collect => {
@@ -45,10 +45,10 @@ impl Server {
                 },
             }
         }
-        Ok(data)
+        Ok(data.into())
     }
 
-    pub fn collect(self) -> Result<Vec<CrateAnalysis>> {
+    pub fn into_analysis(self) -> Result<Analysis> {
         send_message(self.port, &Message::Collect).context("could not stop server")?;
         self.join_handle.join().unwrap()
     }

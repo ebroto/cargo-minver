@@ -4,7 +4,8 @@ use std::str;
 
 use anyhow::{Context, Result};
 
-use cargo_minver::{ipc, wrapper, SERVER_PORT_ENV};
+use cargo_minver::ipc::{self, Message};
+use cargo_minver::{wrapper, SERVER_PORT_ENV};
 
 fn main() -> Result<()> {
     let mut args = env::args().collect::<Vec<_>>();
@@ -28,7 +29,7 @@ fn main() -> Result<()> {
 
         // Send the results to the server.
         let port = server_port_from_env().context("invalid server port in environment")?;
-        ipc::send_message(port, &ipc::Message::Analysis(analysis))
+        ipc::send_message(port, &Message::AnalysisResult(analysis))
             .context("failed to send analysis result to server")?;
         Ok(())
     }

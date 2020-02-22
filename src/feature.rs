@@ -7,13 +7,13 @@ use serde::{Deserialize, Serialize};
 // TODO: allow ignoring features for minimum version calculation?
 //       e.g. macro_import_prelude does not seem to be required
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum FeatureKind {
     Lang,
     Lib,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Feature {
     pub name: String,
     pub kind: FeatureKind,
@@ -48,4 +48,37 @@ impl From<Stability> for Feature {
 pub struct CrateAnalysis {
     pub name: String,
     pub features: Vec<Feature>,
+}
+
+#[derive(Debug)]
+pub struct Analysis {
+    crates: Vec<CrateAnalysis>,
+}
+
+impl From<Vec<CrateAnalysis>> for Analysis {
+    fn from(crates: Vec<CrateAnalysis>) -> Self {
+        Self { crates }
+    }
+}
+
+impl Analysis {
+    pub fn all_features(&self) -> Vec<Feature> {
+        let mut features = self
+            .crates
+            .iter()
+            .map(|a| &a.features)
+            .flatten()
+            .cloned()
+            .collect::<Vec<_>>();
+
+        features.sort_unstable_by(|a, b| {
+            if a.since == b.since {
+                a.name.cmp(&b.name)
+            } else {
+                b.since.cmp(&a.since)
+            }
+        });
+        features.dedup();
+        features
+    }
 }
