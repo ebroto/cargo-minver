@@ -15,3 +15,5 @@ mod feature;
 pub mod ipc;
 mod visitor;
 pub mod wrapper;
+
+pub const SERVER_PORT_ENV: &str = "MINVER_SERVER_PORT";

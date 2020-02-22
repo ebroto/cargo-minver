@@ -16,3 +16,7 @@ structopt = "0.3"
 [[bin]]
 name = "cargo-minver"
 path = "src/bin/minver/main.rs"
+
+[[bin]]
+name = "minver-wrapper"
+path = "src/bin/wrapper/main.rs"
