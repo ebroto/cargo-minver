@@ -31,37 +31,35 @@ impl Driver {
     }
 
     pub fn execute(&mut self) -> Result<Analysis> {
-        // We need to run `cargo clean` to make sure we see all the code.
-        // TODO: improve this.
-        cargo_clean().context("failed to execute cargo clean")?;
-
         // Start a server that will receive the results of the analysis of each crate.
         let server = Server::new(self.server_port).context("could not start server")?;
 
-        // Run `cargo check` to build all the crates.
-        let wrapper_path = self.path_to_wrapper().context("could not find compiler wrapper")?;
-        cargo_check(wrapper_path.as_ref(), self.server_port).context("failed to execute cargo check")?;
+        // Build the crate and its dependencies. Run cargo clean before to make sure we see all the code.
+        // TODO: Store stability information to avoid unnecessary rebuilds.
+        let wrapper_path = path_to_wrapper(self.wrapper_path.clone()).context("could not find compiler wrapper")?;
+        cargo_clean().context("failed to execute cargo clean")?;
+        cargo_check(&wrapper_path, self.server_port).context("failed to execute cargo check")?;
 
         // Process the results of the analysis.
         let analysis = server.into_analysis().context("failed to retrieve analysis result")?;
         Ok(analysis)
     }
+}
 
-    fn path_to_wrapper(&self) -> Result<PathBuf> {
-        let path = match self.wrapper_path.clone() {
-            Some(path) => path,
-            None => {
-                let mut path = env::current_exe()?;
-                path.pop();
-                path.push(WRAPPER_NAME);
-                path
-            },
-        };
-        if !path.is_file() {
-            bail!("{} does not exist or is not a file", path.display());
-        }
-        Ok(path)
+fn path_to_wrapper(wrapper_path: Option<PathBuf>) -> Result<PathBuf> {
+    let path = match wrapper_path {
+        Some(path) => path,
+        None => {
+            let mut path = env::current_exe()?;
+            path.pop();
+            path.push(WRAPPER_NAME);
+            path
+        },
+    };
+    if !path.is_file() {
+        bail!("{} does not exist or is not a file", path.display());
     }
+    Ok(path)
 }
 
 fn cargo_clean() -> Result<()> {
@@ -72,9 +70,9 @@ fn cargo_clean() -> Result<()> {
     Ok(())
 }
 
-fn cargo_check(wrapper_path: &Path, server_port: u16) -> Result<()> {
+fn cargo_check<P: AsRef<Path>, S: ToString>(wrapper_path: P, server_port: S) -> Result<()> {
     let exit_status = Command::new("cargo")
-        .env(WRAPPER_ENV, wrapper_path)
+        .env(WRAPPER_ENV, wrapper_path.as_ref())
         .env(SERVER_PORT_ENV, server_port.to_string())
         .args(vec!["check", "--tests", "--examples", "--benches"])
         .spawn()?
