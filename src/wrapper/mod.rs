@@ -59,17 +59,11 @@ pub fn run<I: IntoIterator<Item = String>>(args: I) -> Result<()> {
 
     if args.iter().any(|arg| arg == "--print=cfg") {
         // Cargo is collecting information about the crate: passthrough to the actual compiler.
-        Command::new("rustc")
-            .args(&args[1..])
-            .status()
-            .context("failed to execute rustc")?;
+        Command::new("rustc").args(&args[1..]).status().context("failed to execute rustc")?;
         Ok(())
     } else {
         // Cargo is building a crate: run the compiler using our wrapper.
-        args.extend(vec![
-            "--sysroot".to_string(),
-            fetch_sysroot().context("could not fetch sysroot")?,
-        ]);
+        args.extend(vec!["--sysroot".to_string(), fetch_sysroot().context("could not fetch sysroot")?]);
         let mut callbacks = MinverCallbacks::default();
         rustc_driver::catch_fatal_errors(|| rustc_driver::run_compiler(&args, &mut callbacks, None, None).ok())
             .map_err(|_| format_err!("compiler returned error exit status"))?;

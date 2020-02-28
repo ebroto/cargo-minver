@@ -38,7 +38,6 @@ impl<'a> visit::Visitor<'a> for Visitor {
         }
 
         match &pat.kind {
-            #[rustfmt::skip]
             PatKind::Range(.., Spanned { node: RangeEnd::Included(RangeSyntax::DotDotEq), .. }) => {
                 self.record_lang_feature(sym::dotdoteq_in_patterns, pat.span);
             },
@@ -94,14 +93,7 @@ pub fn process_imported_macros(session: &Session, resolver: &mut Resolver) -> Ha
             let path = ast::Path::from_ident(ast::Ident::from_str(name));
             match resolver.resolve_macro_path(&path, None, &ParentScope::module(resolver.graph_root()), false, false) {
                 Ok((Some(ext), ..)) => match ext.stability {
-                    Some(
-                        stab
-                        @
-                        Stability {
-                            level: StabilityLevel::Stable { .. },
-                            ..
-                        },
-                    ) => Some((name.clone(), stab)),
+                    Some(stab @ Stability { level: StabilityLevel::Stable { .. }, .. }) => Some((name.clone(), stab)),
                     _ => None,
                 },
                 _ => None,

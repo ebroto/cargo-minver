@@ -14,5 +14,5 @@ match_block_trailing_comma = true
 wrap_comments = true
 normalize_comments = true
 normalize_doc_attributes = true
-#use_small_heuristics = "Max"
+use_small_heuristics = "Max"
 #struct_lit_single_line = false

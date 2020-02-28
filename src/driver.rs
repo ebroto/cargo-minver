@@ -19,10 +19,7 @@ pub struct Driver {
 
 impl Driver {
     pub fn new(server_port: u16) -> Self {
-        Self {
-            server_port,
-            wrapper_path: None,
-        }
+        Self { server_port, wrapper_path: None }
     }
 
     pub fn wrapper_path<P: AsRef<Path>>(&mut self, path: P) -> &mut Self {

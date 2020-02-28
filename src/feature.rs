@@ -22,11 +22,7 @@ pub struct Feature {
 
 impl From<&rustc_feature::Feature> for Feature {
     fn from(feature: &rustc_feature::Feature) -> Self {
-        Feature {
-            name: feature.name.to_string(),
-            kind: FeatureKind::Lang,
-            since: Some(feature.since.parse().unwrap()),
-        }
+        Feature { name: feature.name.to_string(), kind: FeatureKind::Lang, since: Some(feature.since.parse().unwrap()) }
     }
 }
 
@@ -54,11 +50,7 @@ pub struct Span {
 
 impl Display for Span {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{} {}:{} {}:{}",
-            self.file_name, self.start_line, self.start_col, self.end_line, self.end_col
-        )
+        write!(f, "{} {}:{} {}:{}", self.file_name, self.start_line, self.start_col, self.end_line, self.end_col)
     }
 }
 
@@ -71,7 +63,7 @@ pub struct CrateAnalysis {
 
 #[derive(Debug)]
 pub struct Analysis {
-    pub crates: Vec<CrateAnalysis>,
+    crates: Vec<CrateAnalysis>,
 }
 
 impl From<Vec<CrateAnalysis>> for Analysis {
@@ -82,21 +74,9 @@ impl From<Vec<CrateAnalysis>> for Analysis {
 
 impl Analysis {
     pub fn all_features(&self) -> Vec<Feature> {
-        let mut features = self
-            .crates
-            .iter()
-            .map(|a| &a.features)
-            .flatten()
-            .cloned()
-            .collect::<Vec<_>>();
+        let mut features = self.crates.iter().map(|a| &a.features).flatten().cloned().collect::<Vec<_>>();
 
-        features.sort_unstable_by(|a, b| {
-            if a.since == b.since {
-                a.name.cmp(&b.name)
-            } else {
-                b.since.cmp(&a.since)
-            }
-        });
+        features.sort_unstable_by(|a, b| if a.since == b.since { a.name.cmp(&b.name) } else { b.since.cmp(&a.since) });
         features.dedup();
         features
     }

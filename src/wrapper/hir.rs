@@ -31,13 +31,7 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
         empty_tables: &'a ty::TypeckTables<'tcx>,
         imported_macros: &'a HashMap<String, Stability>,
     ) -> Self {
-        Visitor {
-            lib_features: HashMap::new(),
-            tcx,
-            tables: empty_tables,
-            empty_tables,
-            imported_macros,
-        }
+        Visitor { lib_features: HashMap::new(), tcx, tables: empty_tables, empty_tables, imported_macros }
     }
 
     fn process_stability(&mut self, def_id: DefId, span: Span) {
@@ -46,12 +40,8 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
         }
 
         if let Some(stab) = self.tcx.lookup_stability(def_id) {
-            dbg!(&def_id);
             if let attr::Stable { .. } = stab.level {
-                self.lib_features
-                    .entry(*stab)
-                    .or_default()
-                    .insert(span.source_callsite());
+                self.lib_features.entry(*stab).or_default().insert(span.source_callsite());
             }
         }
     }
@@ -61,10 +51,8 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
             ty::Adt(def, _) if !def.is_enum() => {
                 let variant = def.non_enum_variant();
                 for (ident, span) in fields {
-                    if let Some(ty_field) = self
-                        .tcx
-                        .find_field_index(*ident, variant)
-                        .map(|index| &variant.fields[index])
+                    if let Some(ty_field) =
+                        self.tcx.find_field_index(*ident, variant).map(|index| &variant.fields[index])
                     {
                         self.process_stability(ty_field.did, *span);
                     }
@@ -79,16 +67,9 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
             return;
         }
 
-        if let Some(ExpnData {
-            kind: ExpnKind::Macro(_, name),
-            ..
-        }) = span.source_callee()
-        {
+        if let Some(ExpnData { kind: ExpnKind::Macro(_, name), .. }) = span.source_callee() {
             if let Some(stab) = self.imported_macros.get(&name.to_string()) {
-                self.lib_features
-                    .entry(*stab)
-                    .or_default()
-                    .insert(span.source_callsite());
+                self.lib_features.entry(*stab).or_default().insert(span.source_callsite());
             }
         }
     }
@@ -98,11 +79,8 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
         F: FnOnce(&mut Self),
     {
         let def_id = self.tcx.hir().local_def_id(hir_id);
-        let tables = if self.tcx.has_typeck_tables(def_id) {
-            self.tcx.typeck_tables_of(def_id)
-        } else {
-            self.empty_tables
-        };
+        let tables =
+            if self.tcx.has_typeck_tables(def_id) { self.tcx.typeck_tables_of(def_id) } else { self.empty_tables };
 
         let old_tables = mem::replace(&mut self.tables, tables);
         f(self);
@@ -120,6 +98,7 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
 
     fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) {
         self.process_macros(item.span);
+
         match item.kind {
             hir::ItemKind::ExternCrate(_) => {
                 if item.span.is_dummy() {
@@ -131,18 +110,11 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
                     Some(cnum) => cnum,
                     None => return,
                 };
-                let def_id = DefId {
-                    krate: cnum,
-                    index: CRATE_DEF_INDEX,
-                };
+                let def_id = DefId { krate: cnum, index: CRATE_DEF_INDEX };
                 self.process_stability(def_id, item.span);
             },
 
-            hir::ItemKind::Impl {
-                of_trait: Some(ref t),
-                items,
-                ..
-            } => {
+            hir::ItemKind::Impl { of_trait: Some(ref t), items, .. } => {
                 if let Res::Def(DefKind::Trait, trait_did) = t.path.res {
                     for impl_item_ref in items {
                         let impl_item = self.tcx.hir().impl_item(impl_item_ref.id);
@@ -169,6 +141,7 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
 
     fn visit_impl_item(&mut self, impl_item: &'tcx hir::ImplItem<'tcx>) {
         self.process_macros(impl_item.span);
+
         self.with_item_tables(impl_item.hir_id, |v| {
             intravisit::walk_impl_item(v, impl_item);
         })
@@ -176,6 +149,7 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
 
     fn visit_trait_item(&mut self, trait_item: &'tcx hir::TraitItem<'tcx>) {
         self.process_macros(trait_item.span);
+
         self.with_item_tables(trait_item.hir_id, |v| {
             intravisit::walk_trait_item(v, trait_item);
         })
@@ -183,6 +157,7 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
 
     fn visit_pat(&mut self, pat: &'tcx hir::Pat<'tcx>) {
         self.process_macros(pat.span);
+
         match pat.kind {
             hir::PatKind::Struct(_, fields, _) => {
                 if let Some(pat_ty) = self.tables.pat_ty_opt(pat) {
@@ -211,6 +186,7 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
 
     fn visit_expr(&mut self, expr: &'tcx hir::Expr<'tcx>) {
         self.process_macros(expr.span);
+
         match expr.kind {
             hir::ExprKind::MethodCall(..) => {
                 if let Some(def_id) = self.tables.type_dependent_def_id(expr.hir_id) {
