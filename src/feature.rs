@@ -1,5 +1,5 @@
-use rustc_attr::{Stability, StabilityLevel};
-use rustc_feature::Feature as LangFeature;
+use std::collections::{HashMap, HashSet};
+use std::fmt::{self, Display};
 
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -7,21 +7,21 @@ use serde::{Deserialize, Serialize};
 // TODO: allow ignoring features for minimum version calculation?
 //       e.g. macro_import_prelude does not seem to be required
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum FeatureKind {
     Lang,
     Lib,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Feature {
     pub name: String,
     pub kind: FeatureKind,
     pub since: Option<Version>,
 }
 
-impl From<&LangFeature> for Feature {
-    fn from(feature: &LangFeature) -> Self {
+impl From<&rustc_feature::Feature> for Feature {
+    fn from(feature: &rustc_feature::Feature) -> Self {
         Feature {
             name: feature.name.to_string(),
             kind: FeatureKind::Lang,
@@ -30,29 +30,48 @@ impl From<&LangFeature> for Feature {
     }
 }
 
-impl From<Stability> for Feature {
-    fn from(stab: Stability) -> Self {
+impl From<rustc_attr::Stability> for Feature {
+    fn from(stab: rustc_attr::Stability) -> Self {
         Feature {
             name: stab.feature.to_string(),
             kind: FeatureKind::Lib,
-            since: if let StabilityLevel::Stable { since } = stab.level {
-                Some(since.as_str().parse().unwrap())
-            } else {
-                None
+            since: match stab.level {
+                rustc_attr::StabilityLevel::Stable { since } => Some(since.as_str().parse().unwrap()),
+                _ => None,
             },
         }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Span {
+    pub file_name: String,
+    pub start_line: usize,
+    pub start_col: usize,
+    pub end_line: usize,
+    pub end_col: usize,
+}
+
+impl Display for Span {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} {}:{} {}:{}",
+            self.file_name, self.start_line, self.start_col, self.end_line, self.end_col
+        )
     }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct CrateAnalysis {
     pub name: String,
-    pub features: Vec<Feature>,
+    pub features: HashSet<Feature>,
+    pub uses: HashMap<String, HashSet<Span>>,
 }
 
 #[derive(Debug)]
 pub struct Analysis {
-    crates: Vec<CrateAnalysis>,
+    pub crates: Vec<CrateAnalysis>,
 }
 
 impl From<Vec<CrateAnalysis>> for Analysis {

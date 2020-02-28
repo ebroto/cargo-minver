@@ -7,33 +7,37 @@ use rustc_hir::def::{DefKind, Res};
 use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX};
 use rustc_hir::intravisit::{self, NestedVisitorMap};
 use rustc_hir::pat_util::EnumerateAndAdjustIterator;
+use rustc_span::hygiene::{ExpnData, ExpnKind};
+use rustc_span::source_map::SourceMap;
 use rustc_span::symbol::Ident;
 use rustc_span::Span;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::mem;
 
-use crate::feature::Feature;
+use crate::feature::CrateAnalysis;
 
-pub struct Visitor<'a, 'tcx> {
+struct Visitor<'a, 'tcx> {
+    lib_features: HashMap<Stability, HashSet<Span>>,
     tcx: TyCtxt<'tcx>,
-    features: HashSet<Stability>,
     tables: &'a ty::TypeckTables<'tcx>,
     empty_tables: &'a ty::TypeckTables<'tcx>,
+    imported_macros: &'a HashMap<String, Stability>,
 }
 
 impl<'a, 'tcx> Visitor<'a, 'tcx> {
-    pub fn new(tcx: TyCtxt<'tcx>, empty_tables: &'a ty::TypeckTables<'tcx>) -> Self {
+    pub fn new(
+        tcx: TyCtxt<'tcx>,
+        empty_tables: &'a ty::TypeckTables<'tcx>,
+        imported_macros: &'a HashMap<String, Stability>,
+    ) -> Self {
         Visitor {
+            lib_features: HashMap::new(),
             tcx,
-            features: HashSet::new(),
             tables: empty_tables,
             empty_tables,
+            imported_macros,
         }
-    }
-
-    pub fn into_features(self) -> Vec<Feature> {
-        self.features.into_iter().map(Into::into).collect()
     }
 
     fn process_stability(&mut self, def_id: DefId, span: Span) {
@@ -43,11 +47,11 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
 
         if let Some(stab) = self.tcx.lookup_stability(def_id) {
             dbg!(&def_id);
-            match stab.level {
-                attr::Unstable { .. } if span.allows_unstable(stab.feature) => {},
-                _ => {
-                    self.features.insert(*stab);
-                },
+            if let attr::Stable { .. } = stab.level {
+                self.lib_features
+                    .entry(*stab)
+                    .or_default()
+                    .insert(span.source_callsite());
             }
         }
     }
@@ -67,6 +71,25 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
                 }
             },
             _ => {},
+        }
+    }
+
+    fn process_macros(&mut self, span: Span) {
+        if !span.from_expansion() {
+            return;
+        }
+
+        if let Some(ExpnData {
+            kind: ExpnKind::Macro(_, name),
+            ..
+        }) = span.source_callee()
+        {
+            if let Some(stab) = self.imported_macros.get(&name.to_string()) {
+                self.lib_features
+                    .entry(*stab)
+                    .or_default()
+                    .insert(span.source_callsite());
+            }
         }
     }
 
@@ -96,6 +119,7 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
     }
 
     fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) {
+        self.process_macros(item.span);
         match item.kind {
             hir::ItemKind::ExternCrate(_) => {
                 if item.span.is_dummy() {
@@ -144,18 +168,21 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
     }
 
     fn visit_impl_item(&mut self, impl_item: &'tcx hir::ImplItem<'tcx>) {
+        self.process_macros(impl_item.span);
         self.with_item_tables(impl_item.hir_id, |v| {
             intravisit::walk_impl_item(v, impl_item);
         })
     }
 
     fn visit_trait_item(&mut self, trait_item: &'tcx hir::TraitItem<'tcx>) {
+        self.process_macros(trait_item.span);
         self.with_item_tables(trait_item.hir_id, |v| {
             intravisit::walk_trait_item(v, trait_item);
         })
     }
 
     fn visit_pat(&mut self, pat: &'tcx hir::Pat<'tcx>) {
+        self.process_macros(pat.span);
         match pat.kind {
             hir::PatKind::Struct(_, fields, _) => {
                 if let Some(pat_ty) = self.tables.pat_ty_opt(pat) {
@@ -183,6 +210,7 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
     }
 
     fn visit_expr(&mut self, expr: &'tcx hir::Expr<'tcx>) {
+        self.process_macros(expr.span);
         match expr.kind {
             hir::ExprKind::MethodCall(..) => {
                 if let Some(def_id) = self.tables.type_dependent_def_id(expr.hir_id) {
@@ -206,6 +234,21 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
         intravisit::walk_expr(self, expr);
     }
 
+    fn visit_stmt(&mut self, stmt: &'tcx hir::Stmt<'tcx>) {
+        self.process_macros(stmt.span);
+        intravisit::walk_stmt(self, stmt)
+    }
+
+    fn visit_local(&mut self, local: &'tcx hir::Local<'tcx>) {
+        self.process_macros(local.span);
+        intravisit::walk_local(self, local);
+    }
+
+    fn visit_ty(&mut self, t: &'tcx hir::Ty<'tcx>) {
+        self.process_macros(t.span);
+        intravisit::walk_ty(self, t);
+    }
+
     fn visit_path(&mut self, path: &'tcx hir::Path<'tcx>, _id: hir::HirId) {
         if let Some(def_id) = path.res.opt_def_id() {
             self.process_stability(def_id, path.span);
@@ -226,12 +269,24 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
     }
 }
 
-pub fn walk_crate<'tcx>(tcx: TyCtxt<'tcx>) -> Vec<Feature> {
+pub fn walk_crate<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    source_map: &SourceMap,
+    analysis: &mut CrateAnalysis,
+    imported_macros: &mut HashMap<String, Stability>,
+) {
     use intravisit::Visitor as _;
 
     let empty_tables = ty::TypeckTables::empty(None);
-    let mut visitor = Visitor::new(tcx, &empty_tables);
+    let mut visitor = Visitor::new(tcx, &empty_tables, imported_macros);
     tcx.hir().krate().visit_all_item_likes(&mut visitor.as_deep_visitor());
 
-    visitor.into_features()
+    for (stab, spans) in visitor.lib_features {
+        analysis
+            .uses
+            .entry(stab.feature.to_string())
+            .or_default()
+            .extend(spans.into_iter().map(|s| super::convert_span(source_map, s)));
+        analysis.features.insert(stab.into());
+    }
 }

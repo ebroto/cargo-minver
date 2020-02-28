@@ -1,13 +1,16 @@
+use rustc_attr::Stability;
 use rustc_driver::{Callbacks, Compilation};
 use rustc_interface::interface::Compiler;
 use rustc_interface::Queries;
+use rustc_span::source_map::SourceMap;
 
+use std::collections::HashMap;
 use std::process::Command;
 use std::{env, str};
 
 use anyhow::{format_err, Context, Result};
 
-use crate::feature::CrateAnalysis;
+use crate::feature::{CrateAnalysis, Span};
 use crate::ipc::{self, Message};
 use crate::SERVER_PORT_ENV;
 
@@ -17,6 +20,9 @@ mod hir;
 #[derive(Debug, Default)]
 struct MinverCallbacks {
     analysis: CrateAnalysis,
+    // Maps an imported macro name to its stability attributes. This is used when inspecting the HIR
+    // to relate the feature to a set of spans. See process_imported_macros for more details.
+    imported_macros: HashMap<String, Stability>,
 }
 
 impl Callbacks for MinverCallbacks {
@@ -26,23 +32,21 @@ impl Callbacks for MinverCallbacks {
 
         let (krate, boxed_resolver, ..) = &*queries.expansion().unwrap().peek();
         boxed_resolver.borrow().borrow_mut().access(|resolver| {
-            let features = ast::process_imported_macros(session, resolver);
-            self.analysis.features.extend(features);
+            self.imported_macros = ast::process_imported_macros(session, resolver);
         });
 
-        let features = ast::walk_crate(&krate);
-        self.analysis.features.extend(features);
+        ast::walk_crate(&krate, session.source_map(), &mut self.analysis);
 
         Compilation::Continue
     }
 
     fn after_analysis<'tcx>(&mut self, compiler: &Compiler, queries: &'tcx Queries<'tcx>) -> Compilation {
-        compiler.session().abort_if_errors();
+        let session = compiler.session();
+        session.abort_if_errors();
 
         self.analysis.name = queries.crate_name().unwrap().peek().clone();
         queries.global_ctxt().unwrap().peek_mut().enter(|tcx| {
-            let features = hir::walk_crate(tcx);
-            self.analysis.features.extend(features);
+            hir::walk_crate(tcx, session.source_map(), &mut self.analysis, &mut self.imported_macros);
         });
 
         Compilation::Continue
@@ -89,4 +93,17 @@ fn server_port_from_env() -> Result<u16> {
     let port_var = env::var(SERVER_PORT_ENV)?;
     let port = port_var.parse()?;
     Ok(port)
+}
+
+fn convert_span(source_map: &SourceMap, span: rustc_span::Span) -> Span {
+    let start = source_map.lookup_char_pos(span.lo());
+    let end = source_map.lookup_char_pos(span.hi());
+
+    Span {
+        file_name: start.file.name.to_string(),
+        start_line: start.line,
+        start_col: start.col.0,
+        end_line: end.line,
+        end_col: end.col.0,
+    }
 }
