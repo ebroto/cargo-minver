@@ -20,6 +20,6 @@ mod wrapper;
 
 const SERVER_PORT_ENV: &str = "MINVER_SERVER_PORT";
 
-pub use driver::Driver;
+pub use driver::{Driver, Options};
 pub use feature::*;
 pub use wrapper::run as run_as_compiler_wrapper;
