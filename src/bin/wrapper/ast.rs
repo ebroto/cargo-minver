@@ -11,7 +11,7 @@ use syntax::visit;
 
 use std::collections::{HashMap, HashSet};
 
-use super::{convert_span, Wrapper};
+use super::{convert_feature, convert_span, Wrapper};
 
 #[derive(Debug, Default)]
 struct Visitor {
@@ -69,7 +69,7 @@ pub fn walk_crate(wrapper: &mut Wrapper, krate: &ast::Crate, source_map: &Source
     visit::walk_crate(&mut visitor, &krate);
 
     for (feat_name, spans) in visitor.lang_features {
-        let feature = ACCEPTED_FEATURES.iter().find(|f| f.name == feat_name).unwrap().into();
+        let feature = convert_feature(ACCEPTED_FEATURES.iter().find(|f| f.name == feat_name).unwrap());
         wrapper.features.insert(feature);
         wrapper
             .uses

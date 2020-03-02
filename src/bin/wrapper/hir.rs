@@ -15,7 +15,7 @@ use rustc_span::Span;
 use std::collections::{HashMap, HashSet};
 use std::mem;
 
-use super::{convert_span, Wrapper};
+use super::{convert_span, convert_stability, Wrapper};
 
 struct Visitor<'a, 'tcx> {
     lib_features: HashMap<Stability, HashSet<Span>>,
@@ -253,7 +253,7 @@ pub fn walk_crate<'tcx>(wrapper: &mut Wrapper, tcx: TyCtxt<'tcx>, source_map: &S
     tcx.hir().krate().visit_all_item_likes(&mut visitor.as_deep_visitor());
 
     for (stab, spans) in visitor.lib_features {
-        wrapper.features.insert(stab.into());
+        wrapper.features.insert(convert_stability(stab));
         wrapper
             .uses
             .entry(stab.feature.to_string())

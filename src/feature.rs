@@ -20,25 +20,6 @@ pub struct Feature {
     pub since: Option<Version>,
 }
 
-impl From<&rustc_feature::Feature> for Feature {
-    fn from(feature: &rustc_feature::Feature) -> Self {
-        Feature { name: feature.name.to_string(), kind: FeatureKind::Lang, since: Some(feature.since.parse().unwrap()) }
-    }
-}
-
-impl From<rustc_attr::Stability> for Feature {
-    fn from(stab: rustc_attr::Stability) -> Self {
-        Feature {
-            name: stab.feature.to_string(),
-            kind: FeatureKind::Lib,
-            since: match stab.level {
-                rustc_attr::StabilityLevel::Stable { since } => Some(since.as_str().parse().unwrap()),
-                _ => None,
-            },
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Span {
     pub file_name: String,
