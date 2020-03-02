@@ -15,7 +15,7 @@ use rustc_span::Span;
 use std::collections::{HashMap, HashSet};
 use std::mem;
 
-use crate::feature::CrateAnalysis;
+use super::{convert_span, Wrapper};
 
 struct Visitor<'a, 'tcx> {
     lib_features: HashMap<Stability, HashSet<Span>>,
@@ -245,24 +245,19 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
     }
 }
 
-pub fn walk_crate<'tcx>(
-    tcx: TyCtxt<'tcx>,
-    source_map: &SourceMap,
-    analysis: &mut CrateAnalysis,
-    imported_macros: &mut HashMap<String, Stability>,
-) {
+pub fn walk_crate<'tcx>(wrapper: &mut Wrapper, tcx: TyCtxt<'tcx>, source_map: &SourceMap) {
     use intravisit::Visitor as _;
 
     let empty_tables = ty::TypeckTables::empty(None);
-    let mut visitor = Visitor::new(tcx, &empty_tables, imported_macros);
+    let mut visitor = Visitor::new(tcx, &empty_tables, &wrapper.imported_macros);
     tcx.hir().krate().visit_all_item_likes(&mut visitor.as_deep_visitor());
 
     for (stab, spans) in visitor.lib_features {
-        analysis
+        wrapper.features.insert(stab.into());
+        wrapper
             .uses
             .entry(stab.feature.to_string())
             .or_default()
-            .extend(spans.into_iter().map(|s| super::convert_span(source_map, s)));
-        analysis.features.insert(stab.into());
+            .extend(spans.into_iter().map(|s| convert_span(source_map, s)));
     }
 }

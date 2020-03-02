@@ -4,13 +4,13 @@ use rustc_interface::interface::Compiler;
 use rustc_interface::Queries;
 use rustc_span::source_map::SourceMap;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::process::Command;
 use std::{env, str};
 
 use anyhow::{format_err, Context, Result};
 
-use crate::feature::{CrateAnalysis, Span};
+use crate::feature::{CrateAnalysis, Feature, Span};
 use crate::ipc::{self, Message};
 use crate::SERVER_PORT_ENV;
 
@@ -18,14 +18,16 @@ mod ast;
 mod hir;
 
 #[derive(Debug, Default)]
-struct MinverCallbacks {
-    analysis: CrateAnalysis,
+pub struct Wrapper {
+    crate_name: String,
+    features: HashSet<Feature>,
+    uses: HashMap<String, HashSet<Span>>,
     // Maps an imported macro name to its stability attributes. This is used when inspecting the HIR
     // to relate the feature to a set of spans. See process_imported_macros for more details.
     imported_macros: HashMap<String, Stability>,
 }
 
-impl Callbacks for MinverCallbacks {
+impl Callbacks for Wrapper {
     fn after_expansion<'tcx>(&mut self, compiler: &Compiler, queries: &'tcx Queries<'tcx>) -> Compilation {
         let session = compiler.session();
         session.abort_if_errors();
@@ -35,7 +37,7 @@ impl Callbacks for MinverCallbacks {
             self.imported_macros = ast::process_imported_macros(session, resolver);
         });
 
-        ast::walk_crate(&krate, session.source_map(), &mut self.analysis);
+        ast::walk_crate(self, &krate, session.source_map());
 
         Compilation::Continue
     }
@@ -44,12 +46,22 @@ impl Callbacks for MinverCallbacks {
         let session = compiler.session();
         session.abort_if_errors();
 
-        self.analysis.name = queries.crate_name().unwrap().peek().clone();
+        self.crate_name = queries.crate_name().unwrap().peek().clone();
         queries.global_ctxt().unwrap().peek_mut().enter(|tcx| {
-            hir::walk_crate(tcx, session.source_map(), &mut self.analysis, &mut self.imported_macros);
+            hir::walk_crate(self, tcx, session.source_map());
         });
 
         Compilation::Continue
+    }
+}
+
+impl From<Wrapper> for CrateAnalysis {
+    fn from(wrapper: Wrapper) -> Self {
+        CrateAnalysis {
+            name: wrapper.crate_name,
+            features: wrapper.features.into_iter().collect(),
+            uses: wrapper.uses.into_iter().map(|(k, v)| (k, v.into_iter().collect())).collect(),
+        }
     }
 }
 
@@ -64,14 +76,14 @@ pub fn run<I: IntoIterator<Item = String>>(args: I) -> Result<()> {
     } else {
         // Cargo is building a crate: run the compiler using our wrapper.
         args.extend(vec!["--sysroot".to_string(), fetch_sysroot().context("could not fetch sysroot")?]);
-        let mut callbacks = MinverCallbacks::default();
-        rustc_driver::catch_fatal_errors(|| rustc_driver::run_compiler(&args, &mut callbacks, None, None).ok())
+        let mut wrapper = Wrapper::default();
+        rustc_driver::catch_fatal_errors(|| rustc_driver::run_compiler(&args, &mut wrapper, None, None).ok())
             .map_err(|_| format_err!("compiler returned error exit status"))?;
 
         // Send the results to the server.
         let port = server_port_from_env().context("invalid server port in environment")?;
-        ipc::send_message(port, &Message::AnalysisResult(callbacks.analysis))
-            .context("failed to send analysis result to server")?;
+        let message = Message::AnalysisResult(CrateAnalysis::from(wrapper));
+        ipc::send_message(port, &message).context("failed to send analysis result to server")?;
         Ok(())
     }
 }

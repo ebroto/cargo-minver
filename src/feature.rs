@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::{self, Display};
 
 use semver::Version;
@@ -39,7 +39,7 @@ impl From<rustc_attr::Stability> for Feature {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Span {
     pub file_name: String,
     pub start_line: usize,
@@ -57,8 +57,8 @@ impl Display for Span {
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct CrateAnalysis {
     pub name: String,
-    pub features: HashSet<Feature>,
-    pub uses: HashMap<String, HashSet<Span>>,
+    pub features: Vec<Feature>,
+    pub uses: HashMap<String, Vec<Span>>,
 }
 
 #[derive(Debug)]

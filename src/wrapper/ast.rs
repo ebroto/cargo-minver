@@ -11,7 +11,7 @@ use syntax::visit;
 
 use std::collections::{HashMap, HashSet};
 
-use crate::feature::CrateAnalysis;
+use super::{convert_span, Wrapper};
 
 #[derive(Debug, Default)]
 struct Visitor {
@@ -64,18 +64,18 @@ impl Visitor {
     }
 }
 
-pub fn walk_crate(krate: &ast::Crate, source_map: &SourceMap, analysis: &mut CrateAnalysis) {
+pub fn walk_crate(wrapper: &mut Wrapper, krate: &ast::Crate, source_map: &SourceMap) {
     let mut visitor = Visitor::default();
     visit::walk_crate(&mut visitor, &krate);
 
     for (feat_name, spans) in visitor.lang_features {
         let feature = ACCEPTED_FEATURES.iter().find(|f| f.name == feat_name).unwrap().into();
-        analysis.features.insert(feature);
-        analysis
+        wrapper.features.insert(feature);
+        wrapper
             .uses
             .entry(feat_name.to_string())
             .or_default()
-            .extend(spans.into_iter().map(|s| super::convert_span(source_map, s)));
+            .extend(spans.into_iter().map(|s| convert_span(source_map, s)));
     }
 }
 
