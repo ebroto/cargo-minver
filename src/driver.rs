@@ -36,9 +36,15 @@ impl From<Options> for Driver {
     }
 }
 
+impl Default for Driver {
+    fn default() -> Self {
+        Self { opts: Options { server_port: 64221, wrapper_path: None, manifest_path: None } }
+    }
+}
+
 impl Driver {
-    pub fn new(server_port: u16) -> Self {
-        Self { opts: Options { server_port, wrapper_path: None, manifest_path: None } }
+    pub fn new() -> Self {
+        Default::default()
     }
 
     pub fn wrapper_path<P: Into<PathBuf>>(&mut self, path: P) -> &mut Self {
@@ -47,7 +53,7 @@ impl Driver {
     }
 
     pub fn manifest_path<P: Into<PathBuf>>(&mut self, path: P) -> &mut Self {
-        self.opts.wrapper_path = Some(path.into());
+        self.opts.manifest_path = Some(path.into());
         self
     }
 

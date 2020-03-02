@@ -80,4 +80,8 @@ impl Analysis {
         features.dedup();
         features
     }
+
+    pub fn all_feature_uses(&self, name: &str) -> Vec<Span> {
+        self.crates.iter().map(|a| a.uses.get(name)).flatten().flatten().cloned().collect()
+    }
 }
