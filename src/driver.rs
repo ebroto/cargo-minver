@@ -103,6 +103,7 @@ impl Driver {
     }
 
     fn cargo_check(&self) -> Result<()> {
+        let toolchain = env!("MINVER_TOOLCHAIN");
         let wrapper_path = path_to_wrapper(self.opts.wrapper_path.clone()) //
             .context("could not find compiler wrapper")?;
 
@@ -110,7 +111,7 @@ impl Driver {
         let mut builder = command
             .env(WRAPPER_ENV, wrapper_path)
             .env(SERVER_PORT_ENV, self.opts.server_port.to_string())
-            .args(vec!["check", "--tests", "--examples", "--benches"]);
+            .args(vec![toolchain, "check", "--tests", "--examples", "--benches"]);
 
         if let Some(path) = &self.opts.manifest_path {
             builder = builder.arg("--manifest-path").arg(path);
