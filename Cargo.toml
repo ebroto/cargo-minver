@@ -13,10 +13,19 @@ bincode = "1.2"
 semver = { version = "0.9", features = ["serde"] }
 structopt = "0.3"
 
+[dev-dependencies]
+tempfile = "3.1"
+
+[lib]
+test = false
+doctest = false
+
 [[bin]]
 name = "cargo-minver"
 path = "src/bin/minver/main.rs"
+test = false
 
 [[bin]]
 name = "minver-wrapper"
 path = "src/bin/wrapper/main.rs"
+test = false
