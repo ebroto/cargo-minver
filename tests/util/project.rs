@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::{env, fs};
 
-use anyhow::Result;
+use anyhow::{format_err, Result};
 use tempfile::TempDir;
 
 pub struct Builder {
@@ -25,7 +25,7 @@ impl Builder {
 
     pub fn create(&mut self) -> Result<Project> {
         if self.source_files.is_empty() {
-            panic!("project must have at least one source file")
+            format_err!("project must have at least one source file");
         }
 
         let project_dir = TempDir::new()?;

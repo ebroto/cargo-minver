@@ -23,6 +23,9 @@ pub struct Options {
     /// Path to Cargo.toml.
     #[structopt(long)]
     manifest_path: Option<PathBuf>,
+    /// Don't print progress output.
+    #[structopt(short = "q", long)]
+    quiet: bool,
 }
 
 #[derive(Debug)]
@@ -38,13 +41,18 @@ impl From<Options> for Driver {
 
 impl Default for Driver {
     fn default() -> Self {
-        Self { opts: Options { server_port: 64221, wrapper_path: None, manifest_path: None } }
+        Self { opts: Options { server_port: 64221, wrapper_path: None, manifest_path: None, quiet: false } }
     }
 }
 
 impl Driver {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn server_port(&mut self, port: u16) -> &mut Self {
+        self.opts.server_port = port;
+        self
     }
 
     pub fn wrapper_path<P: Into<PathBuf>>(&mut self, path: P) -> &mut Self {
@@ -57,22 +65,65 @@ impl Driver {
         self
     }
 
+    pub fn quiet(&mut self, value: bool) -> &mut Self {
+        self.opts.quiet = value;
+        self
+    }
+
     pub fn execute(&mut self) -> Result<Analysis> {
         // Start a server that will receive the results of the analysis of each crate.
         let server = Server::new(self.opts.server_port).context("could not start server")?;
 
         // Build the crate and its dependencies. Run cargo clean before to make sure we see all the code.
         // TODO: Store stability information to avoid unnecessary rebuilds.
-        let wrapper_path = path_to_wrapper(self.opts.wrapper_path.clone()) //
-            .context("could not find compiler wrapper")?;
-        cargo_clean(self.opts.manifest_path.clone()) //
-            .context("failed to execute cargo clean")?;
-        cargo_check(wrapper_path, self.opts.manifest_path.clone(), self.opts.server_port)
-            .context("failed to execute cargo check")?;
+        self.cargo_clean().context("failed to execute cargo clean")?;
+        self.cargo_check().context("failed to execute cargo check")?;
 
         // Process the results of the analysis.
         let analysis = server.into_analysis().context("failed to retrieve analysis result")?;
         Ok(analysis)
+    }
+
+    fn cargo_clean(&self) -> Result<()> {
+        let mut command = Command::new("cargo");
+        let mut builder = command.arg("clean");
+
+        if let Some(path) = &self.opts.manifest_path {
+            builder = builder.arg("--manifest-path").arg(path);
+        }
+        if self.opts.quiet {
+            builder = builder.arg("--quiet");
+        }
+
+        let exit_status = builder.spawn()?.wait()?;
+        if !exit_status.success() {
+            bail!("process returned error exit status")
+        }
+        Ok(())
+    }
+
+    fn cargo_check(&self) -> Result<()> {
+        let wrapper_path = path_to_wrapper(self.opts.wrapper_path.clone()) //
+            .context("could not find compiler wrapper")?;
+
+        let mut command = Command::new("cargo");
+        let mut builder = command
+            .env(WRAPPER_ENV, wrapper_path)
+            .env(SERVER_PORT_ENV, self.opts.server_port.to_string())
+            .args(vec!["check", "--tests", "--examples", "--benches"]);
+
+        if let Some(path) = &self.opts.manifest_path {
+            builder = builder.arg("--manifest-path").arg(path);
+        }
+        if self.opts.quiet {
+            builder = builder.arg("--quiet");
+        }
+
+        let exit_status = builder.spawn()?.wait()?;
+        if !exit_status.success() {
+            bail!("process returned error exit status")
+        }
+        Ok(())
     }
 }
 
@@ -90,37 +141,4 @@ fn path_to_wrapper(wrapper_path: Option<PathBuf>) -> Result<PathBuf> {
         bail!("{} does not exist or is not a file", path.display());
     }
     Ok(path)
-}
-
-fn cargo_clean(manifest_path: Option<PathBuf>) -> Result<()> {
-    let mut command = Command::new("cargo");
-    let mut builder = command.arg("clean");
-
-    if let Some(path) = manifest_path {
-        builder = builder.arg("--manifest-path").arg(path);
-    }
-
-    let exit_status = builder.spawn()?.wait()?;
-    if !exit_status.success() {
-        bail!("process returned error exit status")
-    }
-    Ok(())
-}
-
-fn cargo_check<S: ToString>(wrapper_path: PathBuf, manifest_path: Option<PathBuf>, server_port: S) -> Result<()> {
-    let mut command = Command::new("cargo");
-    let mut builder = command //
-        .env(WRAPPER_ENV, wrapper_path)
-        .env(SERVER_PORT_ENV, server_port.to_string())
-        .args(vec!["check", "--tests", "--examples", "--benches"]);
-
-    if let Some(path) = manifest_path {
-        builder = builder.arg("--manifest-path").arg(path);
-    }
-
-    let exit_status = builder.spawn()?.wait()?;
-    if !exit_status.success() {
-        bail!("process returned error exit status")
-    }
-    Ok(())
 }
