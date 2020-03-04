@@ -14,7 +14,7 @@ fn dotdot_in_tuple_patterns() -> Result<()> {
         .with_source_file("lang_features/dotdot_in_tuple_patterns.rs")?
         .create()?;
 
-    let analysis = Driver::new() //
+    let analysis = Driver::new()
         .server_port(42001)
         .wrapper_path(util::wrapper_path()?)
         .manifest_path(project.manifest_path())
@@ -43,7 +43,7 @@ fn dotdoteq_in_patterns() -> Result<()> {
     let project =
         Builder::new("dotdoteq_in_patterns").with_source_file("lang_features/dotdoteq_in_patterns.rs")?.create()?;
 
-    let analysis = Driver::new() //
+    let analysis = Driver::new()
         .server_port(42002)
         .wrapper_path(util::wrapper_path()?)
         .manifest_path(project.manifest_path())
@@ -66,7 +66,7 @@ fn inclusive_range_syntax() -> Result<()> {
     let project =
         Builder::new("inclusive_range_syntax").with_source_file("lang_features/inclusive_range_syntax.rs")?.create()?;
 
-    let analysis = Driver::new() //
+    let analysis = Driver::new()
         .server_port(42003)
         .wrapper_path(util::wrapper_path()?)
         .manifest_path(project.manifest_path())
@@ -80,6 +80,31 @@ fn inclusive_range_syntax() -> Result<()> {
     let uses = analysis.all_feature_uses("inclusive_range_syntax");
     assert_eq!(1, uses.len());
     assert_eq!("src/main.rs 2:18 2:23", format!("{}", uses[0]));
+
+    Ok(())
+}
+
+#[test]
+fn crate_in_paths() -> Result<()> {
+    let project = Builder::new("crate_in_paths").with_source_file("lang_features/crate_in_paths.rs")?.create()?;
+
+    let analysis = Driver::new()
+        .server_port(42004)
+        .wrapper_path(util::wrapper_path()?)
+        .manifest_path(project.manifest_path())
+        .quiet(true)
+        .execute()?;
+
+    let feature = analysis.all_features().into_iter().find(|f| f.name == "crate_in_paths").unwrap();
+    assert_eq!(FeatureKind::Lang, feature.kind);
+    assert_eq!(Some("1.30.0".parse().unwrap()), feature.since);
+
+    let mut uses = analysis.all_feature_uses("crate_in_paths");
+    uses.sort_unstable_by(|a, b| a.start_line.cmp(&b.start_line));
+    assert_eq!(3, uses.len());
+    assert_eq!("src/main.rs 5:4 5:9", format!("{}", uses[0]));
+    assert_eq!("src/main.rs 9:8 9:13", format!("{}", uses[1]));
+    assert_eq!("src/main.rs 11:9 11:14", format!("{}", uses[2]));
 
     Ok(())
 }

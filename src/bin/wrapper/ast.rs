@@ -3,7 +3,7 @@ use rustc_feature::ACCEPTED_FEATURES;
 use rustc_resolve::{ParentScope, Resolver};
 use rustc_session::Session;
 use rustc_span::source_map::{SourceMap, Spanned};
-use rustc_span::symbol::{sym, Symbol};
+use rustc_span::symbol::{kw, sym, Symbol};
 use rustc_span::Span;
 use syntax::ast::{self, Pat, PatKind, RangeEnd, RangeSyntax};
 use syntax::ptr::P;
@@ -18,9 +18,9 @@ struct Visitor {
     lang_features: HashMap<Symbol, HashSet<Span>>,
 }
 
-impl<'a> visit::Visitor<'a> for Visitor {
+impl visit::Visitor<'_> for Visitor {
     // TODO: add missing lang features
-    fn visit_expr(&mut self, expr: &'a ast::Expr) {
+    fn visit_expr(&mut self, expr: &ast::Expr) {
         #[allow(clippy::single_match)]
         match expr.kind {
             ast::ExprKind::Range(_, _, ast::RangeLimits::Closed) => {
@@ -32,7 +32,7 @@ impl<'a> visit::Visitor<'a> for Visitor {
         visit::walk_expr(self, expr);
     }
 
-    fn visit_pat(&mut self, pat: &'a ast::Pat) {
+    fn visit_pat(&mut self, pat: &ast::Pat) {
         fn has_rest(ps: &[P<Pat>]) -> bool {
             ps.iter().any(|p| p.is_rest())
         }
@@ -51,6 +51,16 @@ impl<'a> visit::Visitor<'a> for Visitor {
         }
 
         visit::walk_pat(self, pat);
+    }
+
+    fn visit_path(&mut self, path: &ast::Path, _id: ast::NodeId) {
+        for segment in &path.segments {
+            if segment.ident.name == kw::Crate {
+                self.record_lang_feature(sym::crate_in_paths, segment.ident.span);
+            }
+        }
+
+        visit::walk_path(self, path);
     }
 
     fn visit_mac(&mut self, _mac: &ast::Mac) {
