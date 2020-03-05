@@ -21,10 +21,12 @@ struct Visitor {
 impl visit::Visitor<'_> for Visitor {
     // TODO: add missing lang features
     fn visit_expr(&mut self, expr: &ast::Expr) {
-        #[allow(clippy::single_match)]
         match expr.kind {
             ast::ExprKind::Range(_, _, ast::RangeLimits::Closed) => {
                 self.record_lang_feature(sym::inclusive_range_syntax, expr.span);
+            },
+            ast::ExprKind::Break(_, Some(_)) => {
+                self.record_lang_feature(sym::loop_break_value, expr.span);
             },
             _ => {},
         }

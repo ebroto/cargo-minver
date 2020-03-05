@@ -39,6 +39,29 @@ fn dotdot_in_tuple_patterns() -> Result<()> {
 }
 
 #[test]
+fn loop_break_value() -> Result<()> {
+    let project = Builder::new("loop_break_value").with_source_file("lang_features/loop_break_value.rs")?.create()?;
+
+    let analysis = Driver::new()
+        .server_port(42005)
+        .wrapper_path(util::wrapper_path()?)
+        .manifest_path(project.manifest_path())
+        .quiet(true)
+        .execute()?;
+
+    let feature = analysis.all_features().into_iter().find(|f| f.name == "loop_break_value").unwrap();
+    assert_eq!(FeatureKind::Lang, feature.kind);
+    assert_eq!(Some("1.19.0".parse().unwrap()), feature.since);
+
+    let mut uses = analysis.all_feature_uses("loop_break_value");
+    uses.sort();
+    assert_eq!(1, uses.len());
+    assert_eq!("src/main.rs 3:8 3:16", format!("{}", uses[0]));
+
+    Ok(())
+}
+
+#[test]
 fn dotdoteq_in_patterns() -> Result<()> {
     let project =
         Builder::new("dotdoteq_in_patterns").with_source_file("lang_features/dotdoteq_in_patterns.rs")?.create()?;
