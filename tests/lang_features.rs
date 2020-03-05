@@ -26,7 +26,7 @@ fn dotdot_in_tuple_patterns() -> Result<()> {
     assert_eq!(Some("1.14.0".parse().unwrap()), feature.since);
 
     let mut uses = analysis.all_feature_uses("dotdot_in_tuple_patterns");
-    uses.sort_unstable_by(|a, b| a.start_line.cmp(&b.start_line));
+    uses.sort();
     assert_eq!(6, uses.len());
     assert_eq!("src/main.rs 4:8 4:20", format!("{}", uses[0]));
     assert_eq!("src/main.rs 5:8 5:20", format!("{}", uses[1]));
@@ -100,11 +100,17 @@ fn crate_in_paths() -> Result<()> {
     assert_eq!(Some("1.30.0".parse().unwrap()), feature.since);
 
     let mut uses = analysis.all_feature_uses("crate_in_paths");
-    uses.sort_unstable_by(|a, b| a.start_line.cmp(&b.start_line));
-    assert_eq!(3, uses.len());
-    assert_eq!("src/main.rs 5:4 5:9", format!("{}", uses[0]));
-    assert_eq!("src/main.rs 9:8 9:13", format!("{}", uses[1]));
-    assert_eq!("src/main.rs 11:9 11:14", format!("{}", uses[2]));
+    uses.sort();
+    assert_eq!(9, uses.len());
+    assert_eq!("src/main.rs 12:4 12:9", format!("{}", uses[0]));
+    assert_eq!("src/main.rs 14:12 14:17", format!("{}", uses[1]));
+    assert_eq!("src/main.rs 16:8 16:13", format!("{}", uses[2]));
+    assert_eq!("src/main.rs 20:12 20:17", format!("{}", uses[3]));
+    assert_eq!("src/main.rs 21:11 21:16", format!("{}", uses[4]));
+    assert_eq!("src/main.rs 25:8 25:13", format!("{}", uses[5]));
+    assert_eq!("src/main.rs 27:9 27:14", format!("{}", uses[6]));
+    assert_eq!("src/main.rs 35:26 35:31", format!("{}", uses[7]));
+    assert_eq!("src/main.rs 35:45 35:50", format!("{}", uses[8]));
 
     Ok(())
 }

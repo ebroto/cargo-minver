@@ -20,7 +20,7 @@ pub struct Feature {
     pub since: Option<Version>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Span {
     pub file_name: String,
     pub start_line: usize,

@@ -53,14 +53,12 @@ impl visit::Visitor<'_> for Visitor {
         visit::walk_pat(self, pat);
     }
 
-    fn visit_path(&mut self, path: &ast::Path, _id: ast::NodeId) {
-        for segment in &path.segments {
-            if segment.ident.name == kw::Crate {
-                self.record_lang_feature(sym::crate_in_paths, segment.ident.span);
-            }
+    fn visit_path_segment(&mut self, span: Span, segment: &ast::PathSegment) {
+        if segment.ident.name == kw::Crate {
+            self.record_lang_feature(sym::crate_in_paths, segment.ident.span);
         }
 
-        visit::walk_path(self, path);
+        visit::walk_path_segment(self, span, segment);
     }
 
     fn visit_mac(&mut self, _mac: &ast::Mac) {
