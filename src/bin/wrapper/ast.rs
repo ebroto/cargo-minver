@@ -1,3 +1,6 @@
+use rustc_ast::ast::{self, Pat, PatKind, RangeEnd, RangeSyntax};
+use rustc_ast::ptr::P;
+use rustc_ast::visit;
 use rustc_attr::{Stability, StabilityLevel};
 use rustc_feature::ACCEPTED_FEATURES;
 use rustc_resolve::{ParentScope, Resolver};
@@ -5,9 +8,6 @@ use rustc_session::Session;
 use rustc_span::source_map::{SourceMap, Spanned};
 use rustc_span::symbol::{kw, sym, Symbol};
 use rustc_span::Span;
-use syntax::ast::{self, Pat, PatKind, RangeEnd, RangeSyntax};
-use syntax::ptr::P;
-use syntax::visit;
 
 use std::collections::{HashMap, HashSet};
 
