@@ -1,6 +1,6 @@
 use rustc_ast::ast::{self, Pat, PatKind, RangeEnd, RangeSyntax};
 use rustc_ast::ptr::P;
-use rustc_ast::visit;
+use rustc_ast::visit::{self, FnKind};
 use rustc_attr::{Stability, StabilityLevel};
 use rustc_feature::ACCEPTED_FEATURES;
 use rustc_resolve::{ParentScope, Resolver};
@@ -19,14 +19,29 @@ struct Visitor {
 }
 
 impl visit::Visitor<'_> for Visitor {
-    // TODO: add missing lang features
+    fn visit_fn(&mut self, fn_kind: FnKind, span: Span, _node_id: ast::NodeId) {
+        if let Some(header) = fn_kind.header() {
+            if header.asyncness.is_async() {
+                self.record_lang_feature(sym::async_await, span);
+            }
+        }
+
+        visit::walk_fn(self, fn_kind, span);
+    }
+
     fn visit_expr(&mut self, expr: &ast::Expr) {
-        match expr.kind {
+        match &expr.kind {
             ast::ExprKind::Range(_, _, ast::RangeLimits::Closed) => {
                 self.record_lang_feature(sym::inclusive_range_syntax, expr.span);
             },
             ast::ExprKind::Break(_, Some(_)) => {
                 self.record_lang_feature(sym::loop_break_value, expr.span);
+            },
+            ast::ExprKind::Async(..) => {
+                self.record_lang_feature(sym::async_await, expr.span);
+            },
+            ast::ExprKind::Await(_) => {
+                self.record_lang_feature(sym::async_await, expr.span);
             },
             _ => {},
         }

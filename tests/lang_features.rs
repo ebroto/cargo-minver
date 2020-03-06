@@ -3,7 +3,7 @@ mod util;
 use anyhow::Result;
 
 use cargo_minver::{Driver, FeatureKind};
-use util::project::Builder;
+use util::project::{Builder, Edition};
 
 // TODO: use a lang_feature_test!() macro to avoid repetition
 // NOTE: the server port must be different in every test because they run in parallel
@@ -43,7 +43,7 @@ fn loop_break_value() -> Result<()> {
     let project = Builder::new("loop_break_value").with_source_file("lang_features/loop_break_value.rs")?.create()?;
 
     let analysis = Driver::new()
-        .server_port(42005)
+        .server_port(42002)
         .wrapper_path(util::wrapper_path()?)
         .manifest_path(project.manifest_path())
         .quiet(true)
@@ -67,7 +67,7 @@ fn dotdoteq_in_patterns() -> Result<()> {
         Builder::new("dotdoteq_in_patterns").with_source_file("lang_features/dotdoteq_in_patterns.rs")?.create()?;
 
     let analysis = Driver::new()
-        .server_port(42002)
+        .server_port(42003)
         .wrapper_path(util::wrapper_path()?)
         .manifest_path(project.manifest_path())
         .quiet(true)
@@ -90,7 +90,7 @@ fn inclusive_range_syntax() -> Result<()> {
         Builder::new("inclusive_range_syntax").with_source_file("lang_features/inclusive_range_syntax.rs")?.create()?;
 
     let analysis = Driver::new()
-        .server_port(42003)
+        .server_port(42004)
         .wrapper_path(util::wrapper_path()?)
         .manifest_path(project.manifest_path())
         .quiet(true)
@@ -112,7 +112,7 @@ fn crate_in_paths() -> Result<()> {
     let project = Builder::new("crate_in_paths").with_source_file("lang_features/crate_in_paths.rs")?.create()?;
 
     let analysis = Driver::new()
-        .server_port(42004)
+        .server_port(42005)
         .wrapper_path(util::wrapper_path()?)
         .manifest_path(project.manifest_path())
         .quiet(true)
@@ -134,6 +134,35 @@ fn crate_in_paths() -> Result<()> {
     assert_eq!("src/main.rs 27:9 27:14", format!("{}", uses[6]));
     assert_eq!("src/main.rs 35:26 35:31", format!("{}", uses[7]));
     assert_eq!("src/main.rs 35:45 35:50", format!("{}", uses[8]));
+
+    Ok(())
+}
+
+#[test]
+fn async_await() -> Result<()> {
+    let project = Builder::new("async_await")
+        .with_edition(Edition::Edition2018)
+        .with_source_file("lang_features/async_await.rs")?
+        .create()?;
+
+    let analysis = Driver::new()
+        .server_port(42006)
+        .wrapper_path(util::wrapper_path()?)
+        .manifest_path(project.manifest_path())
+        .quiet(true)
+        .execute()?;
+
+    let feature = analysis.all_features().into_iter().find(|f| f.name == "async_await").unwrap();
+    assert_eq!(FeatureKind::Lang, feature.kind);
+    assert_eq!(Some("1.39.0".parse().unwrap()), feature.since);
+
+    let mut uses = analysis.all_feature_uses("async_await");
+    uses.sort();
+    assert_eq!(4, uses.len());
+    assert_eq!("src/main.rs 4:4 4:29", format!("{}", uses[0]));
+    assert_eq!("src/main.rs 7:0 12:1", format!("{}", uses[1]));
+    assert_eq!("src/main.rs 8:17 8:25", format!("{}", uses[2]));
+    assert_eq!("src/main.rs 11:4 11:20", format!("{}", uses[3]));
 
     Ok(())
 }

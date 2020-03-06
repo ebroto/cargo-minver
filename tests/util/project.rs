@@ -1,17 +1,37 @@
 use std::path::PathBuf;
-use std::{env, fs};
+use std::{env, fmt, fs};
 
 use anyhow::{format_err, Result};
 use tempfile::TempDir;
 
+pub enum Edition {
+    Edition2015,
+    Edition2018,
+}
+
+impl fmt::Display for Edition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Edition::Edition2015 => write!(f, "2015"),
+            Edition::Edition2018 => write!(f, "2018"),
+        }
+    }
+}
+
 pub struct Builder {
     name: String,
+    edition: Edition,
     source_files: Vec<PathBuf>,
 }
 
 impl Builder {
     pub fn new(name: &str) -> Self {
-        Self { name: name.into(), source_files: Vec::new() }
+        Self { name: name.into(), edition: Edition::Edition2015, source_files: Vec::new() }
+    }
+
+    pub fn with_edition(&mut self, edition: Edition) -> &mut Self {
+        self.edition = edition;
+        self
     }
 
     pub fn with_source_file<P: Into<PathBuf>>(&mut self, path: P) -> Result<&mut Self> {
@@ -45,8 +65,9 @@ impl Builder {
             r#"[package]
 name = "{}"
 version = "0.0.0"
+edition = "{}"
 "#,
-            self.name
+            self.name, self.edition
         );
         fs::write(manifest_path, manifest)?;
 
