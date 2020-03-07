@@ -54,7 +54,16 @@ test_lang_features!(
         ]
     ),
     (
-        async_await, //
+        raw_identifiers,
+        Edition::Edition2015,
+        "1.30.0",
+        [
+            "2:8 2:15", //
+            "3:13 3:20",
+        ]
+    ),
+    (
+        async_await,
         Edition::Edition2018,
         "1.39.0",
         [

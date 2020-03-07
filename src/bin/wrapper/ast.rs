@@ -5,7 +5,7 @@ use rustc_attr::{Stability, StabilityLevel};
 use rustc_feature::ACCEPTED_FEATURES;
 use rustc_resolve::{ParentScope, Resolver};
 use rustc_session::Session;
-use rustc_span::source_map::{SourceMap, Spanned};
+use rustc_span::source_map::Spanned;
 use rustc_span::symbol::{kw, sym, Symbol};
 use rustc_span::Span;
 
@@ -89,10 +89,16 @@ impl Visitor {
     }
 }
 
-pub fn walk_crate(wrapper: &mut Wrapper, krate: &ast::Crate, source_map: &SourceMap) {
+pub fn walk_crate(wrapper: &mut Wrapper, krate: &ast::Crate, session: &Session) {
     let mut visitor = Visitor::default();
     visit::walk_crate(&mut visitor, &krate);
 
+    let raw_idents = session.parse_sess.raw_identifier_spans.borrow();
+    if !raw_idents.is_empty() {
+        visitor.lang_features.insert(sym::raw_identifiers, raw_idents.iter().cloned().collect());
+    }
+
+    let source_map = session.source_map();
     for (feat_name, spans) in visitor.lang_features {
         let feature = convert_feature(ACCEPTED_FEATURES.iter().find(|f| f.name == feat_name).unwrap());
         wrapper.features.insert(feature);

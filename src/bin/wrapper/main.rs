@@ -85,7 +85,7 @@ impl Callbacks for Wrapper {
             self.imported_macros = ast::process_imported_macros(session, resolver);
         });
 
-        ast::walk_crate(self, &krate, session.source_map());
+        ast::walk_crate(self, krate, session);
 
         Compilation::Continue
     }
