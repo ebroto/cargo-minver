@@ -28,3 +28,50 @@ pub fn wrapper_path() -> Result<PathBuf> {
 
     dir_entries.iter().last().map(|e| e.path()).ok_or_else(|| format_err!("minver wrapper not found in deps dir"))
 }
+
+macro_rules! test_lang_feature {
+    ($port: expr, ($name: ident, $edition: expr, $version: expr, $spans: expr)) => {
+        #[test]
+        fn $name() -> anyhow::Result<()> {
+            let feature_name = stringify!($name);
+            let source_file = format!("lang_features/{}.rs", feature_name);
+            let project = util::project::Builder::new(feature_name) //
+                .with_edition($edition)
+                .with_source_file(source_file)?
+                .create()?;
+
+            let analysis = cargo_minver::Driver::new()
+                .server_port($port)
+                .wrapper_path(util::wrapper_path()?)
+                .manifest_path(project.manifest_path())
+                .quiet(true)
+                .execute()?;
+
+            let feature = analysis.all_features().into_iter().find(|f| f.name == feature_name).unwrap();
+            assert_eq!(cargo_minver::FeatureKind::Lang, feature.kind);
+            assert_eq!(Some($version.parse().unwrap()), feature.since);
+
+            let mut uses = analysis.all_feature_uses(feature_name);
+            uses.sort();
+            assert_eq!($spans.len(), uses.len());
+            for (expected, actual) in $spans.iter().zip(uses.iter()) {
+                assert_eq!(format!("src/main.rs {}", expected), format!("{}", actual));
+            }
+
+            Ok(())
+        }
+    };
+}
+
+macro_rules! test_lang_features {
+    ($($feature:tt),*) => {
+        test_lang_features!(@step 42000u16, $($feature,)*);
+    };
+
+    (@step $port:expr, $head:tt, $($tail:tt,)*) => {
+        test_lang_feature!($port, $head);
+        test_lang_features!(@step $port + 1u16, $($tail,)*);
+    };
+
+    (@step $_port: expr,) => {};
+}
