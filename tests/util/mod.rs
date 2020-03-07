@@ -34,7 +34,7 @@ macro_rules! test_lang_feature {
         #[test]
         fn $name() -> anyhow::Result<()> {
             let feature_name = stringify!($name);
-            let source_file = format!("lang_features/{}.rs", feature_name);
+            let source_file = format!("lang_files/{}.rs", feature_name);
             let project = util::project::Builder::new(feature_name) //
                 .with_edition($edition)
                 .with_source_file(source_file)?

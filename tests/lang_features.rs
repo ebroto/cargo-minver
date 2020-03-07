@@ -1,9 +1,10 @@
 #[macro_use]
-#[path = "util/mod.rs"] // NOTE: See https://github.com/rust-lang/rustfmt/issues/3794
 mod util;
 
 use util::project::Edition;
 
+// Each entry creates a test for a language feature. Input files are taken from the lang_files directory.
+// The format is: (feature name, edition, rustc version, spans)
 test_lang_features!(
     (
         dotdot_in_tuple_patterns,
