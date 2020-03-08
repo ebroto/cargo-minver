@@ -43,6 +43,16 @@ impl visit::Visitor<'_> for Visitor {
             ast::ExprKind::Await(_) => {
                 self.record_lang_feature(sym::async_await, expr.span);
             },
+            ast::ExprKind::Lit(lit) => {
+                if let ast::LitKind::Int(_, ty) = lit.kind {
+                    match ty {
+                        ast::LitIntType::Signed(ast::IntTy::I128) | ast::LitIntType::Unsigned(ast::UintTy::U128) => {
+                            self.record_lang_feature(sym::i128_type, expr.span);
+                        },
+                        _ => {},
+                    }
+                }
+            },
             _ => {},
         }
 

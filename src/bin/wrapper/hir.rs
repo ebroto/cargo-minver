@@ -1,7 +1,9 @@
 use rustc::hir::map::Map;
 use rustc::ty::{self, TyCtxt};
+use rustc_ast::ast;
 use rustc_attr as attr;
 use rustc_attr::Stability;
+use rustc_feature::ACCEPTED_FEATURES;
 use rustc_hir as hir;
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX};
@@ -9,15 +11,16 @@ use rustc_hir::intravisit::{self, NestedVisitorMap};
 use rustc_hir::pat_util::EnumerateAndAdjustIterator;
 use rustc_span::hygiene::{ExpnData, ExpnKind};
 use rustc_span::source_map::SourceMap;
-use rustc_span::symbol::Ident;
+use rustc_span::symbol::{sym, Ident, Symbol};
 use rustc_span::Span;
 
 use std::collections::{HashMap, HashSet};
 use std::mem;
 
-use super::{convert_span, convert_stability, Wrapper};
+use super::{convert_feature, convert_span, convert_stability, Wrapper};
 
 struct Visitor<'a, 'tcx> {
+    lang_features: HashMap<Symbol, HashSet<Span>>,
     lib_features: HashMap<Stability, HashSet<Span>>,
     tcx: TyCtxt<'tcx>,
     tables: &'a ty::TypeckTables<'tcx>,
@@ -31,7 +34,18 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
         empty_tables: &'a ty::TypeckTables<'tcx>,
         imported_macros: &'a HashMap<String, Stability>,
     ) -> Self {
-        Visitor { lib_features: HashMap::new(), tcx, tables: empty_tables, empty_tables, imported_macros }
+        Visitor {
+            lang_features: HashMap::new(),
+            lib_features: HashMap::new(),
+            tcx,
+            tables: empty_tables,
+            empty_tables,
+            imported_macros,
+        }
+    }
+
+    fn record_lang_feature(&mut self, feature: Symbol, span: Span) {
+        self.lang_features.entry(feature).or_default().insert(span);
     }
 
     fn process_stability(&mut self, def_id: DefId, span: Span) {
@@ -59,6 +73,19 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
                 }
             },
             _ => {},
+        }
+    }
+
+    fn process_res(&mut self, res: Res, span: Span) {
+        match res {
+            Res::PrimTy(hir::PrimTy::Int(ast::IntTy::I128)) | Res::PrimTy(hir::PrimTy::Uint(ast::UintTy::U128)) => {
+                self.record_lang_feature(sym::i128_type, span);
+            },
+            _ => {
+                if let Some(def_id) = res.opt_def_id() {
+                    self.process_stability(def_id, span);
+                }
+            },
         }
     }
 
@@ -226,19 +253,15 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
     }
 
     fn visit_path(&mut self, path: &'tcx hir::Path<'tcx>, _id: hir::HirId) {
-        if let Some(def_id) = path.res.opt_def_id() {
-            self.process_stability(def_id, path.span);
-        }
-
+        self.process_res(path.res, path.span);
         intravisit::walk_path(self, path);
     }
 
     fn visit_qpath(&mut self, qpath: &'tcx hir::QPath<'tcx>, id: hir::HirId, span: Span) {
         // NOTE: QPath::Resolved will be checked when visiting its inner path
         if let hir::QPath::TypeRelative(..) = qpath {
-            if let Some(def_id) = self.tables.qpath_res(qpath, id).opt_def_id() {
-                self.process_stability(def_id, span);
-            }
+            let res = self.tables.qpath_res(qpath, id);
+            self.process_res(res, span);
         }
 
         intravisit::walk_qpath(self, qpath, id, span);
@@ -251,6 +274,16 @@ pub fn walk_crate<'tcx>(wrapper: &mut Wrapper, tcx: TyCtxt<'tcx>, source_map: &S
     let empty_tables = ty::TypeckTables::empty(None);
     let mut visitor = Visitor::new(tcx, &empty_tables, &wrapper.imported_macros);
     tcx.hir().krate().visit_all_item_likes(&mut visitor.as_deep_visitor());
+
+    for (feat_name, spans) in visitor.lang_features {
+        let feature = convert_feature(ACCEPTED_FEATURES.iter().find(|f| f.name == feat_name).unwrap());
+        wrapper.features.insert(feature);
+        wrapper
+            .uses
+            .entry(feat_name.to_string())
+            .or_default()
+            .extend(spans.into_iter().map(|s| convert_span(source_map, s)));
+    }
 
     for (stab, spans) in visitor.lib_features {
         wrapper.features.insert(convert_stability(stab));
