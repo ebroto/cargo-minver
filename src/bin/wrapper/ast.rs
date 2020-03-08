@@ -53,6 +53,11 @@ impl visit::Visitor<'_> for Visitor {
                     }
                 }
             },
+            ast::ExprKind::Let(pat, _) => {
+                if let ast::PatKind::Or(_) = pat.kind {
+                    self.record_lang_feature(sym::if_while_or_patterns, pat.span);
+                }
+            },
             _ => {},
         }
 

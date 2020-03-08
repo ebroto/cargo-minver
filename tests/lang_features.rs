@@ -78,6 +78,15 @@ test_lang_features!(
         ]
     ),
     (
+        if_while_or_patterns,
+        Edition::Edition2015,
+        "1.33.0",
+        [
+            "2:11 2:18", //
+            "3:14 3:21",
+        ]
+    ),
+    (
         async_await,
         Edition::Edition2018,
         "1.39.0",
