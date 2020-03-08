@@ -19,6 +19,30 @@ struct Visitor {
 }
 
 impl visit::Visitor<'_> for Visitor {
+    fn visit_use_tree(&mut self, use_tree: &ast::UseTree, node_id: ast::NodeId, _nested: bool) {
+        if let ast::UseTreeKind::Simple(Some(ident), ..) = use_tree.kind {
+            if ident.name == kw::Underscore {
+                self.record_lang_feature(sym::underscore_imports, ident.span);
+            }
+        }
+
+        visit::walk_use_tree(self, use_tree, node_id);
+    }
+
+    fn visit_item(&mut self, item: &ast::Item) {
+        #[allow(clippy::single_match)]
+        match item.kind {
+            ast::ItemKind::ExternCrate(_) => {
+                if item.ident.name == kw::Underscore {
+                    self.record_lang_feature(sym::underscore_imports, item.ident.span);
+                }
+            },
+            _ => {},
+        }
+
+        visit::walk_item(self, item);
+    }
+
     fn visit_fn(&mut self, fn_kind: FnKind, span: Span, _node_id: ast::NodeId) {
         if let Some(header) = fn_kind.header() {
             if header.asyncness.is_async() {

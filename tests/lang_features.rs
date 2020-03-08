@@ -87,6 +87,15 @@ test_lang_features!(
         ]
     ),
     (
+        underscore_imports,
+        Edition::Edition2015,
+        "1.33.0",
+        [
+            "3:20 3:21", //
+            "4:16 4:17",
+        ]
+    ),
+    (
         async_await,
         Edition::Edition2018,
         "1.39.0",
