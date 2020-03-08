@@ -103,6 +103,9 @@ impl visit::Visitor<'_> for Visitor {
             PatKind::TupleStruct(_, ps) if ps.len() > 1 && has_rest(ps) => {
                 self.record_lang_feature(sym::dotdot_in_tuple_patterns, pat.span);
             },
+            PatKind::Paren(..) => {
+                self.record_lang_feature(sym::pattern_parentheses, pat.span);
+            },
             _ => {},
         }
 

@@ -78,6 +78,12 @@ test_lang_features!(
         ]
     ),
     (
+        pattern_parentheses,
+        Edition::Edition2015, //
+        "1.31.0",
+        ["5:8 5:12"]
+    ),
+    (
         if_while_or_patterns,
         Edition::Edition2015,
         "1.33.0",
