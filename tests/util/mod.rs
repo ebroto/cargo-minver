@@ -47,15 +47,19 @@ macro_rules! test_lang_feature {
                 .quiet(true)
                 .execute()?;
 
-            let feature = analysis.all_features().into_iter().find(|f| f.name == feature_name).unwrap();
-            assert_eq!(cargo_minver::FeatureKind::Lang, feature.kind);
-            assert_eq!(Some($version.parse().unwrap()), feature.since);
+            let feature = analysis //
+                .all_features()
+                .into_iter()
+                .find(|f| f.name == feature_name)
+                .expect("feature not found");
+            assert_eq!(cargo_minver::FeatureKind::Lang, feature.kind, "expected feature kind to match");
+            assert_eq!(Some($version.parse().unwrap()), feature.since, "expected stabilization version to match");
 
             let mut uses = analysis.all_feature_uses(feature_name);
             uses.sort();
-            assert_eq!($spans.len(), uses.len());
+            assert_eq!($spans.len(), uses.len(), "expected feature use count to match");
             for (expected, actual) in $spans.iter().zip(uses.iter()) {
-                assert_eq!(format!("src/main.rs {}", expected), format!("{}", actual));
+                assert_eq!(format!("src/main.rs {}", expected), format!("{}", actual), "expected span to match");
             }
 
             Ok(())
