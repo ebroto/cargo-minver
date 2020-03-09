@@ -7,6 +7,19 @@ use util::project::Edition;
 // The format is: (feature name, edition, rustc version, spans)
 test_lang_features!(
     (
+        braced_empty_structs,
+        Edition::Edition2015,
+        "1.8.0",
+        [
+            "1:0 1:11", //
+            "4:4 4:8",
+            "8:12 8:16",
+            "10:8 10:12",
+            "13:12 13:19",
+            "15:8 15:15"
+        ]
+    ),
+    (
         dotdot_in_tuple_patterns,
         Edition::Edition2015,
         "1.14.0",

@@ -30,17 +30,31 @@ impl visit::Visitor<'_> for Visitor {
     }
 
     fn visit_item(&mut self, item: &ast::Item) {
-        #[allow(clippy::single_match)]
-        match item.kind {
+        match &item.kind {
             ast::ItemKind::ExternCrate(_) => {
                 if item.ident.name == kw::Underscore {
                     self.record_lang_feature(sym::underscore_imports, item.ident.span);
+                }
+            },
+            ast::ItemKind::Struct(ast::VariantData::Struct(fields, _), _) => {
+                if fields.is_empty() {
+                    self.record_lang_feature(sym::braced_empty_structs, item.span);
                 }
             },
             _ => {},
         }
 
         visit::walk_item(self, item);
+    }
+
+    fn visit_variant(&mut self, variant: &ast::Variant) {
+        if let ast::VariantData::Struct(fields, _) = &variant.data {
+            if fields.is_empty() {
+                self.record_lang_feature(sym::braced_empty_structs, variant.span);
+            }
+        }
+
+        visit::walk_variant(self, variant);
     }
 
     fn visit_fn(&mut self, fn_kind: FnKind, span: Span, _node_id: ast::NodeId) {
@@ -82,6 +96,11 @@ impl visit::Visitor<'_> for Visitor {
                     self.record_lang_feature(sym::if_while_or_patterns, pat.span);
                 }
             },
+            ast::ExprKind::Struct(_, fields, base) => {
+                if fields.is_empty() && base.is_none() {
+                    self.record_lang_feature(sym::braced_empty_structs, expr.span);
+                }
+            },
             _ => {},
         }
 
@@ -96,6 +115,11 @@ impl visit::Visitor<'_> for Visitor {
         match &pat.kind {
             PatKind::Range(.., Spanned { node: RangeEnd::Included(RangeSyntax::DotDotEq), .. }) => {
                 self.record_lang_feature(sym::dotdoteq_in_patterns, pat.span);
+            },
+            PatKind::Struct(_, fields, rest) => {
+                if fields.is_empty() && !rest {
+                    self.record_lang_feature(sym::braced_empty_structs, pat.span);
+                }
             },
             PatKind::Tuple(ps) if has_rest(ps) => {
                 self.record_lang_feature(sym::dotdot_in_tuple_patterns, pat.span);
