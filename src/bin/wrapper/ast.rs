@@ -96,11 +96,6 @@ impl visit::Visitor<'_> for Visitor {
                     self.record_lang_feature(sym::if_while_or_patterns, pat.span);
                 }
             },
-            ast::ExprKind::Struct(_, fields, base) => {
-                if fields.is_empty() && base.is_none() {
-                    self.record_lang_feature(sym::braced_empty_structs, expr.span);
-                }
-            },
             _ => {},
         }
 
@@ -115,11 +110,6 @@ impl visit::Visitor<'_> for Visitor {
         match &pat.kind {
             PatKind::Range(.., Spanned { node: RangeEnd::Included(RangeSyntax::DotDotEq), .. }) => {
                 self.record_lang_feature(sym::dotdoteq_in_patterns, pat.span);
-            },
-            PatKind::Struct(_, fields, rest) => {
-                if fields.is_empty() && !rest {
-                    self.record_lang_feature(sym::braced_empty_structs, pat.span);
-                }
             },
             PatKind::Tuple(ps) if has_rest(ps) => {
                 self.record_lang_feature(sym::dotdot_in_tuple_patterns, pat.span);

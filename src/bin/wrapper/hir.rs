@@ -60,6 +60,15 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
         }
     }
 
+    fn process_struct(&mut self, ty_kind: &ty::TyKind, res: Res, span: Span) {
+        if let ty::Adt(def, _) = ty_kind {
+            let variant = def.variant_of_res(res);
+            if variant.fields.is_empty() {
+                self.record_lang_feature(sym::braced_empty_structs, span);
+            }
+        }
+    }
+
     fn process_fields(&mut self, ty_kind: &ty::TyKind, fields: &[(Ident, Span)]) {
         match ty_kind {
             ty::Adt(def, _) if !def.is_enum() => {
@@ -78,7 +87,7 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
 
     fn process_res(&mut self, res: Res, span: Span) {
         match res {
-            Res::PrimTy(hir::PrimTy::Int(ast::IntTy::I128)) | Res::PrimTy(hir::PrimTy::Uint(ast::UintTy::U128)) => {
+            Res::PrimTy(hir::PrimTy::Int(ast::IntTy::I128) | hir::PrimTy::Uint(ast::UintTy::U128)) => {
                 self.record_lang_feature(sym::i128_type, span);
             },
             _ => {
@@ -185,9 +194,12 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
     fn visit_pat(&mut self, pat: &'tcx hir::Pat<'tcx>) {
         self.process_macros(pat.span);
 
-        match pat.kind {
-            hir::PatKind::Struct(_, fields, _) => {
+        match &pat.kind {
+            hir::PatKind::Struct(qpath, fields, _) => {
                 if let Some(pat_ty) = self.tables.pat_ty_opt(pat) {
+                    let res = self.tables.qpath_res(qpath, pat.hir_id);
+                    self.process_struct(&pat_ty.kind, res, pat.span);
+
                     let fields = fields.iter().map(|f| (f.ident, f.span)).collect::<Vec<_>>();
                     self.process_fields(&pat_ty.kind, &fields);
                 }
@@ -197,7 +209,7 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
                     match pat_ty.kind {
                         ty::Adt(def, _) if !def.is_enum() => {
                             let variant = def.non_enum_variant();
-                            for (i, subpat) in subpats.iter().enumerate_and_adjust(variant.fields.len(), ddpos) {
+                            for (i, subpat) in subpats.iter().enumerate_and_adjust(variant.fields.len(), *ddpos) {
                                 self.process_stability(variant.fields[i].did, subpat.span);
                             }
                         },
@@ -225,8 +237,11 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
                     self.process_fields(&expr_ty.kind, &[(ident, subexpr.span)]);
                 }
             },
-            hir::ExprKind::Struct(_, fields, _) => {
+            hir::ExprKind::Struct(qpath, fields, _) => {
                 if let Some(expr_ty) = self.tables.expr_ty_adjusted_opt(expr) {
+                    let res = self.tables.qpath_res(qpath, expr.hir_id);
+                    self.process_struct(&expr_ty.kind, res, expr.span);
+
                     let idents = fields.iter().map(|f| (f.ident, f.span)).collect::<Vec<_>>();
                     self.process_fields(&expr_ty.kind, &idents);
                 }

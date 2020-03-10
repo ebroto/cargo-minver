@@ -1,4 +1,5 @@
 #![feature(rustc_private)]
+#![feature(or_patterns)]
 
 extern crate rustc;
 extern crate rustc_ast;
