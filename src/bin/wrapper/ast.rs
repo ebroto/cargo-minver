@@ -37,9 +37,13 @@ impl visit::Visitor<'_> for Visitor {
                 }
             },
             ast::ItemKind::Struct(ast::VariantData::Struct(fields, _), _) => {
+                self.check_non_exhaustive(&item.attrs, item.span);
                 if fields.is_empty() {
                     self.record_lang_feature(sym::braced_empty_structs, item.span);
                 }
+            },
+            ast::ItemKind::Enum(..) => {
+                self.check_non_exhaustive(&item.attrs, item.span);
             },
             _ => {},
         }
@@ -142,6 +146,12 @@ impl visit::Visitor<'_> for Visitor {
 impl Visitor {
     fn record_lang_feature(&mut self, feature: Symbol, span: Span) {
         self.lang_features.entry(feature).or_default().insert(span);
+    }
+
+    fn check_non_exhaustive(&mut self, attrs: &[ast::Attribute], span: Span) {
+        if attrs.iter().any(|a| a.has_name(sym::non_exhaustive)) {
+            self.record_lang_feature(sym::non_exhaustive, span);
+        }
     }
 }
 
