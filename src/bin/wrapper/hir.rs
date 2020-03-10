@@ -71,6 +71,8 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
 
     fn process_fields(&mut self, ty_kind: &ty::TyKind, fields: &[(Ident, Span)]) {
         match ty_kind {
+            // NOTE: Stability attributes in struct enum variants are not checked by rustc.
+            // See FnCtx::check_expr_struct_fields in librustc_typeck.
             ty::Adt(def, _) if !def.is_enum() => {
                 let variant = def.non_enum_variant();
                 for (ident, span) in fields {
