@@ -71,6 +71,14 @@ impl visit::Visitor<'_> for Visitor {
         visit::walk_fn(self, fn_kind, span);
     }
 
+    fn visit_param(&mut self, param: &ast::Param) {
+        if !param.attrs.is_empty() {
+            self.record_lang_feature(sym::param_attrs, param.span);
+        }
+
+        visit::walk_param(self, param);
+    }
+
     fn visit_expr(&mut self, expr: &ast::Expr) {
         match &expr.kind {
             ast::ExprKind::Range(_, _, ast::RangeLimits::Closed) => {
