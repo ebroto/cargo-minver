@@ -30,7 +30,7 @@ pub fn wrapper_path() -> Result<PathBuf> {
 }
 
 macro_rules! test_lang_feature {
-    ($port: expr, ($name: ident, $edition: expr, $version: expr, $spans: expr)) => {
+    ($port: expr, ($name: ident, $edition: expr, $version: expr, $spans: expr $(, $inspect:expr)?)) => {
         #[test]
         fn $name() -> anyhow::Result<()> {
             let feature_name = stringify!($name);
@@ -57,6 +57,9 @@ macro_rules! test_lang_feature {
 
             let mut uses = analysis.all_feature_uses(feature_name);
             uses.sort();
+            $(if ($inspect) {
+                dbg!(&uses);
+            })?
             assert_eq!($spans.len(), uses.len(), "expected feature use count to match");
             for (expected, actual) in $spans.iter().zip(uses.iter()) {
                 assert_eq!(format!("src/main.rs {}", expected), format!("{}", actual), "expected span to match");

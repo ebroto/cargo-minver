@@ -4,7 +4,7 @@ mod util;
 use util::project::Edition;
 
 // Each entry creates a test for a language feature. Input files are taken from the lang_files directory.
-// The format is: (feature name, edition, rustc version, spans)
+// The format is: (feature name, edition, rustc version, spans, inspect?). Inspect is just for debugging.
 test_lang_features!(
     (
         braced_empty_structs,
@@ -66,6 +66,16 @@ test_lang_features!(
             "11:12 11:16",
             "12:13 12:19",
             "13:13 13:19"
+        ]
+    ),
+    (
+        repr_transparent,
+        Edition::Edition2015,
+        "1.28.0",
+        [
+            "6:0 6:14", //
+            "9:0 11:1",
+            "14:0 17:1",
         ]
     ),
     (
@@ -149,6 +159,16 @@ test_lang_features!(
         [
             "4:0 4:11", //
             "7:0 7:9",
+        ]
+    ),
+    (
+        transparent_enums,
+        Edition::Edition2015,
+        "1.42.0",
+        [
+            "4:0 6:1", //
+            "9:0 11:1",
+            "14:0 16:1",
         ]
     )
 );

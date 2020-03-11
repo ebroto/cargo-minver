@@ -36,14 +36,18 @@ impl visit::Visitor<'_> for Visitor {
                     self.record_lang_feature(sym::underscore_imports, item.ident.span);
                 }
             },
-            ast::ItemKind::Struct(ast::VariantData::Struct(fields, _), _) => {
-                self.check_non_exhaustive(&item.attrs, item.span);
-                if fields.is_empty() {
-                    self.record_lang_feature(sym::braced_empty_structs, item.span);
+            ast::ItemKind::Struct(variant_data, _) => {
+                if let ast::VariantData::Struct(fields, _) = variant_data {
+                    if fields.is_empty() {
+                        self.record_lang_feature(sym::braced_empty_structs, item.span);
+                    }
                 }
+                self.check_non_exhaustive(item);
+                self.check_repr_transparent(item);
             },
             ast::ItemKind::Enum(..) => {
-                self.check_non_exhaustive(&item.attrs, item.span);
+                self.check_non_exhaustive(item);
+                self.check_repr_transparent(item);
             },
             _ => {},
         }
@@ -156,9 +160,31 @@ impl Visitor {
         self.lang_features.entry(feature).or_default().insert(span);
     }
 
-    fn check_non_exhaustive(&mut self, attrs: &[ast::Attribute], span: Span) {
-        if attrs.iter().any(|a| a.has_name(sym::non_exhaustive)) {
-            self.record_lang_feature(sym::non_exhaustive, span);
+    fn check_non_exhaustive(&mut self, item: &ast::Item) {
+        if item.attrs.iter().any(|a| a.has_name(sym::non_exhaustive)) {
+            self.record_lang_feature(sym::non_exhaustive, item.span);
+        }
+    }
+
+    fn check_repr_transparent(&mut self, item: &ast::Item) {
+        let is_transparent = item
+            .attrs
+            .iter()
+            .filter(|a| a.has_name(sym::repr))
+            .filter_map(|a| a.meta_item_list())
+            .flatten()
+            .any(|m| m.name_or_empty() == sym::transparent);
+
+        if is_transparent {
+            match &item.kind {
+                ast::ItemKind::Struct(..) => {
+                    self.record_lang_feature(sym::repr_transparent, item.span);
+                },
+                ast::ItemKind::Enum(..) => {
+                    self.record_lang_feature(sym::transparent_enums, item.span);
+                },
+                _ => {},
+            }
         }
     }
 }
