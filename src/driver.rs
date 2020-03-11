@@ -12,7 +12,7 @@ use crate::SERVER_PORT_ENV;
 const WRAPPER_ENV: &str = "RUSTC_WRAPPER";
 const WRAPPER_NAME: &str = "minver-wrapper";
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Default, StructOpt)]
 pub struct Options {
     /// The port used by the local server.
     #[structopt(short = "p", long, default_value = "64221")]
@@ -26,6 +26,15 @@ pub struct Options {
     /// Don't print progress output.
     #[structopt(short = "q", long)]
     quiet: bool,
+    /// Space-separated list of cargo features to activate
+    #[structopt(long)]
+    features: Option<String>,
+    /// Activate all available cargo features
+    #[structopt(long)]
+    all_features: bool,
+    /// Do not activate the `default` cargo feature
+    #[structopt(long)]
+    no_default_features: bool,
 }
 
 #[derive(Debug)]
@@ -41,7 +50,7 @@ impl From<Options> for Driver {
 
 impl Default for Driver {
     fn default() -> Self {
-        Self { opts: Options { server_port: 64221, wrapper_path: None, manifest_path: None, quiet: false } }
+        Self { opts: Options { server_port: 64221, ..Default::default() } }
     }
 }
 
@@ -67,6 +76,21 @@ impl Driver {
 
     pub fn quiet(&mut self, value: bool) -> &mut Self {
         self.opts.quiet = value;
+        self
+    }
+
+    pub fn features(&mut self, features: &str) -> &mut Self {
+        self.opts.features = Some(features.into());
+        self
+    }
+
+    pub fn all_features(&mut self, value: bool) -> &mut Self {
+        self.opts.all_features = value;
+        self
+    }
+
+    pub fn no_default_features(&mut self, value: bool) -> &mut Self {
+        self.opts.no_default_features = value;
         self
     }
 
@@ -103,6 +127,22 @@ impl Driver {
     }
 
     fn cargo_check(&self) -> Result<()> {
+        fn path_to_wrapper(wrapper_path: Option<PathBuf>) -> Result<PathBuf> {
+            let path = match wrapper_path {
+                Some(path) => path,
+                None => {
+                    let mut path = env::current_exe()?;
+                    path.pop();
+                    path.push(WRAPPER_NAME);
+                    path
+                },
+            };
+            if !path.is_file() {
+                bail!("{} does not exist or is not a file", path.display());
+            }
+            Ok(path)
+        }
+
         let toolchain = env!("MINVER_TOOLCHAIN");
         let wrapper_path = path_to_wrapper(self.opts.wrapper_path.clone()) //
             .context("could not find compiler wrapper")?;
@@ -119,6 +159,15 @@ impl Driver {
         if self.opts.quiet {
             builder = builder.arg("--quiet");
         }
+        if let Some(features) = self.opts.features.as_ref() {
+            builder = builder.arg("--features").arg(features);
+        }
+        if self.opts.all_features {
+            builder = builder.arg("--all-features");
+        }
+        if self.opts.no_default_features {
+            builder = builder.arg("--no-default-features");
+        }
 
         let exit_status = builder.spawn()?.wait()?;
         if !exit_status.success() {
@@ -126,20 +175,4 @@ impl Driver {
         }
         Ok(())
     }
-}
-
-fn path_to_wrapper(wrapper_path: Option<PathBuf>) -> Result<PathBuf> {
-    let path = match wrapper_path {
-        Some(path) => path,
-        None => {
-            let mut path = env::current_exe()?;
-            path.pop();
-            path.push(WRAPPER_NAME);
-            path
-        },
-    };
-    if !path.is_file() {
-        bail!("{} does not exist or is not a file", path.display());
-    }
-    Ok(path)
 }
