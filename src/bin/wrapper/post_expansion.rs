@@ -43,11 +43,14 @@ impl visit::Visitor<'_> for Visitor {
                     }
                 }
                 self.check_non_exhaustive(item);
-                self.check_repr_transparent(item);
+                self.check_repr(item);
             },
             ast::ItemKind::Enum(..) => {
                 self.check_non_exhaustive(item);
-                self.check_repr_transparent(item);
+                self.check_repr(item);
+            },
+            ast::ItemKind::Union(..) => {
+                self.check_repr(item);
             },
             _ => {},
         }
@@ -91,10 +94,7 @@ impl visit::Visitor<'_> for Visitor {
             ast::ExprKind::Break(_, Some(_)) => {
                 self.record_lang_feature(sym::loop_break_value, expr.span);
             },
-            ast::ExprKind::Async(..) => {
-                self.record_lang_feature(sym::async_await, expr.span);
-            },
-            ast::ExprKind::Await(_) => {
+            ast::ExprKind::Async(..) | ast::ExprKind::Await(_) => {
                 self.record_lang_feature(sym::async_await, expr.span);
             },
             ast::ExprKind::Lit(lit) => {
@@ -166,22 +166,35 @@ impl Visitor {
         }
     }
 
-    fn check_repr_transparent(&mut self, item: &ast::Item) {
-        let is_transparent = item
+    fn check_repr(&mut self, item: &ast::Item) {
+        let metas = item
             .attrs
             .iter()
             .filter(|a| a.has_name(sym::repr))
             .filter_map(|a| a.meta_item_list())
             .flatten()
-            .any(|m| m.name_or_empty() == sym::transparent);
+            .collect::<Vec<_>>();
 
-        if is_transparent {
+        if metas.iter().any(|m| m.name_or_empty() == sym::transparent) {
+            // NOTE: repr transparent for unions is still unstable
             match &item.kind {
                 ast::ItemKind::Struct(..) => {
                     self.record_lang_feature(sym::repr_transparent, item.span);
                 },
                 ast::ItemKind::Enum(..) => {
                     self.record_lang_feature(sym::transparent_enums, item.span);
+                },
+                _ => {},
+            }
+        }
+
+        if metas.iter().any(|m| m.name_or_empty() == sym::align) {
+            match &item.kind {
+                ast::ItemKind::Struct(..) | ast::ItemKind::Union(..) => {
+                    self.record_lang_feature(sym::repr_align, item.span);
+                },
+                ast::ItemKind::Enum(..) => {
+                    self.record_lang_feature(sym::repr_align_enum, item.span);
                 },
                 _ => {},
             }

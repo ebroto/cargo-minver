@@ -42,6 +42,16 @@ test_lang_features!(
         ["3:8 3:16"]
     ),
     (
+        repr_align,
+        Edition::Edition2015,
+        "1.25.0",
+        [
+            "4:0 6:1", //
+            "9:0 12:1"
+        ],
+        true
+    ),
+    (
         dotdoteq_in_patterns, //
         Edition::Edition2015,
         "1.26.0",
@@ -126,6 +136,12 @@ test_lang_features!(
             "3:20 3:21", //
             "4:16 4:17",
         ]
+    ),
+    (
+        repr_align_enum, //
+        Edition::Edition2015,
+        "1.37.0",
+        ["4:0 6:1",]
     ),
     (
         async_await,
