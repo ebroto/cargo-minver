@@ -52,6 +52,11 @@ impl visit::Visitor<'_> for Visitor {
             ast::ItemKind::Union(..) => {
                 self.check_repr(item);
             },
+            ast::ItemKind::Static(..) => {
+                if item.attrs.iter().any(|a| a.has_name(sym::used)) {
+                    self.record_lang_feature(sym::used, item.span);
+                }
+            },
             _ => {},
         }
 

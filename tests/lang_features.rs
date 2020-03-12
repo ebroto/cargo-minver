@@ -114,6 +114,12 @@ test_lang_features!(
         ]
     ),
     (
+        used, //
+        Edition::Edition2015,
+        "1.30.0",
+        ["2:0 2:21"]
+    ),
+    (
         pattern_parentheses,
         Edition::Edition2015, //
         "1.31.0",
