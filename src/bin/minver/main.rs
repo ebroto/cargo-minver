@@ -3,9 +3,6 @@ use structopt::StructOpt;
 
 use cargo_minver::{Driver, Options};
 
-// TODO: pin to specific nightly
-// TODO: add automatic +nightly...
-
 #[derive(Debug, StructOpt)]
 #[structopt(bin_name = "cargo")]
 enum Cargo {

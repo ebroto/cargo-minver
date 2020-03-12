@@ -29,6 +29,7 @@ use cargo_minver::{CrateAnalysis, Feature, FeatureKind, Span, SERVER_PORT_ENV};
 
 mod post_analysis;
 mod post_expansion;
+mod pre_expansion;
 
 fn main() -> Result<()> {
     let mut args = env::args().collect::<Vec<_>>();
@@ -77,6 +78,16 @@ pub struct Wrapper {
 }
 
 impl Callbacks for Wrapper {
+    fn after_parsing<'tcx>(&mut self, compiler: &Compiler, queries: &'tcx Queries<'tcx>) -> Compilation {
+        let session = compiler.session();
+        session.abort_if_errors();
+
+        let krate = &*queries.parse().unwrap().peek();
+        pre_expansion::walk_crate(self, krate, session);
+
+        Compilation::Continue
+    }
+
     fn after_expansion<'tcx>(&mut self, compiler: &Compiler, queries: &'tcx Queries<'tcx>) -> Compilation {
         let session = compiler.session();
         session.abort_if_errors();

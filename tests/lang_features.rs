@@ -162,6 +162,12 @@ test_lang_features!(
         ]
     ),
     (
+        cfg_doctest, //
+        Edition::Edition2015,
+        "1.40.0",
+        ["1:0 1:15"]
+    ),
+    (
         transparent_enums,
         Edition::Edition2015,
         "1.42.0",
