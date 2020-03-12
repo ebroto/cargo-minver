@@ -27,8 +27,8 @@ use anyhow::{format_err, Context, Result};
 use cargo_minver::ipc::{self, Message};
 use cargo_minver::{CrateAnalysis, Feature, FeatureKind, Span, SERVER_PORT_ENV};
 
-mod ast;
-mod hir;
+mod post_analysis;
+mod post_expansion;
 
 fn main() -> Result<()> {
     let mut args = env::args().collect::<Vec<_>>();
@@ -83,10 +83,10 @@ impl Callbacks for Wrapper {
 
         let (krate, boxed_resolver, ..) = &*queries.expansion().unwrap().peek();
         boxed_resolver.borrow().borrow_mut().access(|resolver| {
-            self.imported_macros = ast::process_imported_macros(session, resolver);
+            self.imported_macros = post_expansion::process_imported_macros(session, resolver);
         });
 
-        ast::walk_crate(self, krate, session);
+        post_expansion::walk_crate(self, krate, session);
 
         Compilation::Continue
     }
@@ -97,7 +97,7 @@ impl Callbacks for Wrapper {
 
         self.crate_name = queries.crate_name().unwrap().peek().clone();
         queries.global_ctxt().unwrap().peek_mut().enter(|tcx| {
-            hir::walk_crate(self, tcx, session.source_map());
+            post_analysis::walk_crate(self, tcx, session.source_map());
         });
 
         Compilation::Continue
