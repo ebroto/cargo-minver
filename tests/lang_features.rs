@@ -138,10 +138,16 @@ test_lang_features!(
         ]
     ),
     (
+        repr_packed, //
+        Edition::Edition2015,
+        "1.33.0",
+        ["4:0 6:1"]
+    ),
+    (
         repr_align_enum, //
         Edition::Edition2015,
         "1.37.0",
-        ["4:0 6:1",]
+        ["4:0 6:1"]
     ),
     (
         async_await,

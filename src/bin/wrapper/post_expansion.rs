@@ -199,6 +199,12 @@ impl Visitor {
                 _ => {},
             }
         }
+
+        if metas.iter().any(|m| matches!(m.name_value_literal(), Some((sym::packed, _)))) {
+            if let ast::ItemKind::Struct(..) = item.kind {
+                self.record_lang_feature(sym::repr_packed, item.span);
+            }
+        }
     }
 }
 
