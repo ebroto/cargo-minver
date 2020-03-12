@@ -33,9 +33,9 @@ macro_rules! test_lang_feature {
     ($port: expr, ($name: ident, $edition: expr, $version: expr, $spans: expr $(, $inspect:expr)?)) => {
         #[test]
         fn $name() -> anyhow::Result<()> {
-            let feature_name = stringify!($name);
-            let source_file = format!("lang_files/{}.rs", feature_name);
-            let project = util::project::Builder::new(feature_name) //
+            let name = stringify!($name);
+            let source_file = format!("lang_files/{}.rs", name);
+            let project = util::project::Builder::new(name) //
                 .with_edition($edition)
                 .with_source_file(source_file)?
                 .create()?;
@@ -47,24 +47,16 @@ macro_rules! test_lang_feature {
                 .quiet(true)
                 .execute()?;
 
-            let feature = analysis //
-                .all_features()
-                .into_iter()
-                .find(|f| f.name == feature_name)
-                .expect("feature not found");
+            let feature = analysis.feature(name).expect("feature not found");
             assert_eq!(cargo_minver::FeatureKind::Lang, feature.kind, "expected feature kind to match");
             assert_eq!(Some($version.parse().unwrap()), feature.since, "expected stabilization version to match");
 
-            let mut uses = analysis.all_feature_uses(feature_name);
-            uses.sort();
-            $(if ($inspect) {
-                dbg!(&uses);
-            })?
+            let uses = analysis.all_feature_uses(name);
+            $(if ($inspect) { dbg!(&uses); })?
             assert_eq!($spans.len(), uses.len(), "expected feature use count to match");
             for (expected, actual) in $spans.iter().zip(uses.iter()) {
                 assert_eq!(format!("src/main.rs {}", expected), format!("{}", actual), "expected span to match");
             }
-
             Ok(())
         }
     };

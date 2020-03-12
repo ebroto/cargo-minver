@@ -54,15 +54,21 @@ impl From<Vec<CrateAnalysis>> for Analysis {
 }
 
 impl Analysis {
-    pub fn all_features(&self) -> Vec<Feature> {
-        let mut features = self.crates.iter().map(|a| &a.features).flatten().cloned().collect::<Vec<_>>();
+    pub fn feature(&self, name: &str) -> Option<&Feature> {
+        self.crates.iter().map(|a| &a.features).flatten().find(|f| f.name == name)
+    }
+
+    pub fn all_features(&self) -> Vec<&Feature> {
+        let mut features = self.crates.iter().map(|a| &a.features).flatten().collect::<Vec<_>>();
 
         features.sort_unstable_by(|a, b| if a.since == b.since { a.name.cmp(&b.name) } else { b.since.cmp(&a.since) });
         features.dedup();
         features
     }
 
-    pub fn all_feature_uses(&self, name: &str) -> Vec<Span> {
-        self.crates.iter().map(|a| a.uses.get(name)).flatten().flatten().cloned().collect()
+    pub fn all_feature_uses(&self, name: &str) -> Vec<&Span> {
+        let mut uses = self.crates.iter().map(|a| a.uses.get(name)).flatten().flatten().collect::<Vec<_>>();
+        uses.sort();
+        uses
     }
 }
