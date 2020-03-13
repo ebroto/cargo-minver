@@ -56,6 +56,8 @@ impl visit::Visitor<'_> for Visitor {
                 if item.attrs.iter().any(|a| a.has_name(sym::used)) {
                     self.record_lang_feature(sym::used, item.span);
                 }
+                // NOTE: Athough declared as a lang feature, the global_allocator attribute
+                // macro is defined in libcore and will be detected as a library feature.
             },
             _ => {},
         }
