@@ -150,6 +150,12 @@ test_lang_features!(
         ["4:0 6:1"]
     ),
     (
+        cfg_target_vendor, //
+        Edition::Edition2015,
+        "1.33.0",
+        ["1:0 1:33"]
+    ),
+    (
         repr_align_enum, //
         Edition::Edition2015,
         "1.37.0",

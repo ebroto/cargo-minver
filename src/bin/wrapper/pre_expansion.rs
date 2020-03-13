@@ -1,5 +1,4 @@
 use rustc_ast::{ast, visit};
-use rustc_attr as attr;
 use rustc_feature::ACCEPTED_FEATURES;
 use rustc_session::Session;
 use rustc_span::symbol::{sym, Symbol};
@@ -17,9 +16,14 @@ struct Visitor {
 impl visit::Visitor<'_> for Visitor {
     fn visit_attribute(&mut self, attr: &ast::Attribute) {
         if attr.has_name(sym::cfg) {
-            let list = attr.meta_item_list().unwrap_or_default();
-            if attr::list_contains_name(&list, sym::doctest) {
-                self.record_lang_feature(sym::cfg_doctest, attr.span);
+            for item in attr.meta_item_list().unwrap_or_default() {
+                // NOTE: sym::target_vendor does not exist
+                let name = item.name_or_empty();
+                if name == sym::doctest {
+                    self.record_lang_feature(sym::cfg_doctest, attr.span);
+                } else if name.as_str() == "target_vendor" {
+                    self.record_lang_feature(sym::cfg_target_vendor, attr.span);
+                }
             }
         }
 
