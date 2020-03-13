@@ -156,6 +156,16 @@ test_lang_features!(
         ["1:0 1:33"]
     ),
     (
+        cfg_attr_multi,
+        Edition::Edition2015,
+        "1.33.0",
+        [
+            "3:0 3:69", //
+            "7:0 7:20",
+            "10:18 10:84"
+        ]
+    ),
+    (
         repr_align_enum, //
         Edition::Edition2015,
         "1.37.0",
