@@ -79,6 +79,17 @@ test_lang_features!(
         ]
     ),
     (
+        cfg_target_feature,
+        Edition::Edition2015,
+        "1.27.0",
+        [
+            "3:6 3:26", //
+            "6:10 6:30",
+            "10:12 10:32",
+            "11:16 11:36"
+        ]
+    ),
+    (
         repr_transparent,
         Edition::Edition2015,
         "1.28.0",
@@ -150,10 +161,15 @@ test_lang_features!(
         ["4:0 6:1"]
     ),
     (
-        cfg_target_vendor, //
+        cfg_target_vendor,
         Edition::Edition2015,
         "1.33.0",
-        ["1:0 1:33"]
+        [
+            "3:6 3:31", //
+            "6:10 6:35",
+            "10:12 10:37",
+            "11:16 11:41"
+        ]
     ),
     (
         cfg_attr_multi,
@@ -206,10 +222,15 @@ test_lang_features!(
         ]
     ),
     (
-        cfg_doctest, //
+        cfg_doctest,
         Edition::Edition2015,
         "1.40.0",
-        ["1:0 1:15"]
+        [
+            "3:6 3:13", //
+            "6:10 6:17",
+            "10:12 10:19",
+            "11:16 11:23"
+        ]
     ),
     (
         transparent_enums,

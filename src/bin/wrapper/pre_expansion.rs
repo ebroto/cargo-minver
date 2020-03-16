@@ -1,6 +1,7 @@
 use rustc_ast::{ast, visit};
 use rustc_feature::ACCEPTED_FEATURES;
-use rustc_session::Session;
+use rustc_parse::{self, MACRO_ARGUMENTS};
+use rustc_session::{parse::ParseSess, Session};
 use rustc_span::symbol::{sym, Symbol};
 use rustc_span::Span;
 
@@ -8,65 +9,82 @@ use std::collections::{HashMap, HashSet};
 
 use super::{convert_feature, convert_span, Wrapper};
 
-#[derive(Debug, Default)]
-struct Visitor {
+struct Visitor<'a> {
     lang_features: HashMap<Symbol, HashSet<Span>>,
+    parse_sess: &'a ParseSess,
+    // NOTE: sym::target_vendor does not exist
+    target_vendor: Symbol,
 }
 
-impl visit::Visitor<'_> for Visitor {
+impl<'a, 'b> visit::Visitor<'b> for Visitor<'a> {
     fn visit_attribute(&mut self, attr: &ast::Attribute) {
-        if let ast::AttrKind::Normal(_) = &attr.kind {
-            if attr.has_name(sym::cfg) {
-                for item in attr.meta_item_list().unwrap_or_default() {
-                    // NOTE: sym::target_vendor does not exist
-                    let name = item.name_or_empty();
-                    if name == sym::doctest {
-                        self.record_lang_feature(sym::cfg_doctest, attr.span);
-                    } else if name.as_str() == "target_vendor" {
-                        self.record_lang_feature(sym::cfg_target_vendor, attr.span);
-                    }
-                }
-            }
-
-            if let Some(meta) = attr.meta() {
-                self.check_cfg_attr_multi(&meta);
+        if attr.has_name(sym::cfg) || attr.has_name(sym::cfg_attr) {
+            if let Some(ref item) = attr.meta() {
+                self.walk_cfg_metas(item);
             }
         }
 
         visit::walk_attribute(self, attr);
     }
 
-    fn visit_mac(&mut self, _mac: &ast::Mac) {
-        // Do nothing.
+    fn visit_mac(&mut self, mac: &ast::Mac) {
+        if mac.path.segments.len() == 1 && mac.path.segments[0].ident.name == sym::cfg {
+            let tts = mac.args.inner_tokens();
+            let mut parser = rustc_parse::stream_to_parser(self.parse_sess, tts, MACRO_ARGUMENTS);
+            if let Ok(cfg) = parser.parse_meta_item() {
+                self.walk_cfg_metas(&cfg);
+            }
+        }
+
+        visit::walk_mac(self, mac);
     }
 }
 
-impl Visitor {
+impl<'a> Visitor<'a> {
+    fn new(parse_sess: &'a ParseSess) -> Self {
+        Self { lang_features: Default::default(), parse_sess, target_vendor: Symbol::intern("target_vendor") }
+    }
+
     fn record_lang_feature(&mut self, feature: Symbol, span: Span) {
         self.lang_features.entry(feature).or_default().insert(span);
     }
 
-    fn check_cfg_attr_multi(&mut self, meta: &ast::MetaItem) {
-        if meta.name_or_empty() != sym::cfg_attr {
-            return;
-        }
-
-        if let Some(metas) = meta.meta_item_list() {
-            if metas.len() != 2 {
-                self.record_lang_feature(sym::cfg_attr_multi, meta.span);
-            }
-
-            for meta in metas {
-                if let Some(meta) = meta.meta_item() {
-                    self.check_cfg_attr_multi(&meta);
+    fn walk_cfg_metas(&mut self, item: &ast::MetaItem) {
+        match &item.kind {
+            ast::MetaItemKind::List(items) => {
+                let name = item.name_or_empty();
+                if name == sym::cfg_attr && items.len() != 2 {
+                    self.record_lang_feature(sym::cfg_attr_multi, item.span);
                 }
-            }
+
+                for nested in items {
+                    if let Some(item) = nested.meta_item() {
+                        self.walk_cfg_metas(item);
+                    }
+                }
+            },
+            _ => {
+                self.visit_cfg_meta(&item);
+            },
+        }
+    }
+
+    fn visit_cfg_meta(&mut self, item: &ast::MetaItem) {
+        let maybe_feature = match item.name_or_empty() {
+            sym::doctest => Some(sym::cfg_doctest),
+            sym::target_feature => Some(sym::cfg_target_feature),
+            vendor if vendor == self.target_vendor => Some(sym::cfg_target_vendor),
+            _ => None,
+        };
+
+        if let Some(feature) = maybe_feature {
+            self.record_lang_feature(feature, item.span);
         }
     }
 }
 
 pub fn walk_crate(wrapper: &mut Wrapper, krate: &ast::Crate, session: &Session) {
-    let mut visitor = Visitor::default();
+    let mut visitor = Visitor::new(&session.parse_sess);
     visit::walk_crate(&mut visitor, &krate);
 
     let source_map = session.source_map();

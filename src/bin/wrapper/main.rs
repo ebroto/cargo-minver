@@ -8,6 +8,7 @@ extern crate rustc_driver;
 extern crate rustc_feature;
 extern crate rustc_hir;
 extern crate rustc_interface;
+extern crate rustc_parse;
 extern crate rustc_resolve;
 extern crate rustc_session;
 extern crate rustc_span;
