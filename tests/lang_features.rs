@@ -90,6 +90,14 @@ test_lang_features!(
         ]
     ),
     (
+        target_feature,
+        Edition::Edition2015,
+        "1.27.0",
+        [
+            "3:0 3:34", //
+        ]
+    ),
+    (
         repr_transparent,
         Edition::Edition2015,
         "1.28.0",

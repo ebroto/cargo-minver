@@ -29,6 +29,12 @@ impl visit::Visitor<'_> for Visitor {
         visit::walk_use_tree(self, use_tree, node_id);
     }
 
+    fn visit_attribute(&mut self, attr: &ast::Attribute) {
+        if attr.has_name(sym::target_feature) {
+            self.record_lang_feature(sym::target_feature, attr.span);
+        }
+    }
+
     fn visit_item(&mut self, item: &ast::Item) {
         match &item.kind {
             ast::ItemKind::ExternCrate(_) => {
