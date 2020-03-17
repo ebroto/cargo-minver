@@ -58,6 +58,12 @@ impl<'a, 'b> visit::Visitor<'b> for Visitor<'a> {
 
         visit::walk_pat(self, pat);
     }
+
+    fn visit_generic_param(&mut self, param: &ast::GenericParam) {
+        if let Some(attr) = param.attrs.iter().find(|a| is_active_attr(a)) {
+            self.record_lang_feature(sym::generic_param_attrs, attr.span);
+        }
+    }
 }
 
 impl<'a> Visitor<'a> {
