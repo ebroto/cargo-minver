@@ -23,6 +23,12 @@ test_lang_features!(
         ]
     ),
     (
+        deprecated, //
+        Edition::Edition2015,
+        "1.9.0",
+        ["3:0 3:13"]
+    ),
+    (
         dotdot_in_tuple_patterns,
         Edition::Edition2015,
         "1.14.0",
@@ -90,12 +96,10 @@ test_lang_features!(
         ]
     ),
     (
-        target_feature,
+        target_feature, //
         Edition::Edition2015,
         "1.27.0",
-        [
-            "3:0 3:34", //
-        ]
+        ["3:0 3:34"]
     ),
     (
         repr_transparent,

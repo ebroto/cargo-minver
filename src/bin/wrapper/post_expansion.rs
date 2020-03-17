@@ -30,8 +30,13 @@ impl visit::Visitor<'_> for Visitor {
     }
 
     fn visit_attribute(&mut self, attr: &ast::Attribute) {
-        if attr.has_name(sym::target_feature) {
-            self.record_lang_feature(sym::target_feature, attr.span);
+        let maybe_feature = match attr.name_or_empty() {
+            feature @ (sym::target_feature | sym::deprecated) => Some(feature),
+            _ => None,
+        };
+
+        if let Some(feature) = maybe_feature {
+            self.record_lang_feature(feature, attr.span);
         }
     }
 
