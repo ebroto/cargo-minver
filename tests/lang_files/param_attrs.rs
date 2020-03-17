@@ -15,7 +15,7 @@ impl T for S {
 }
 
 #[rustfmt::skip]
-extern "C" { fn _var_fun(_a: u32, #[allow(unused_variables)]...); }
+extern "C" { fn _var_fun(_a: u32, #[allow(unused_variables)] ...); }
 
 fn main() {
     let f1 = |#[allow(unused_variables)] x, _y| {};
