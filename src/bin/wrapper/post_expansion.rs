@@ -1,4 +1,4 @@
-use rustc_ast::ast::{self, Pat, PatKind, RangeEnd, RangeSyntax};
+use rustc_ast::ast::{self, Pat, RangeEnd, RangeSyntax};
 use rustc_ast::ptr::P;
 use rustc_ast::visit::{self, FnKind};
 use rustc_attr::{Stability, StabilityLevel};
@@ -130,6 +130,11 @@ impl visit::Visitor<'_> for Visitor {
                     self.record_lang_feature(sym::if_while_or_patterns, pat.span);
                 }
             },
+            ast::ExprKind::Struct(_, fields, _) => {
+                if fields.iter().any(|f| !f.attrs.is_empty()) {
+                    self.record_lang_feature(sym::struct_field_attributes, expr.span)
+                }
+            },
             _ => {},
         }
 
@@ -142,16 +147,21 @@ impl visit::Visitor<'_> for Visitor {
         }
 
         match &pat.kind {
-            PatKind::Range(.., Spanned { node: RangeEnd::Included(RangeSyntax::DotDotEq), .. }) => {
+            ast::PatKind::Range(.., Spanned { node: RangeEnd::Included(RangeSyntax::DotDotEq), .. }) => {
                 self.record_lang_feature(sym::dotdoteq_in_patterns, pat.span);
             },
-            PatKind::Tuple(ps) if has_rest(ps) => {
+            ast::PatKind::Struct(_, fields, _) => {
+                if fields.iter().any(|f| !f.attrs.is_empty()) {
+                    self.record_lang_feature(sym::struct_field_attributes, pat.span)
+                }
+            },
+            ast::PatKind::Tuple(ps) if has_rest(ps) => {
                 self.record_lang_feature(sym::dotdot_in_tuple_patterns, pat.span);
             },
-            PatKind::TupleStruct(_, ps) if ps.len() > 1 && has_rest(ps) => {
+            ast::PatKind::TupleStruct(_, ps) if ps.len() > 1 && has_rest(ps) => {
                 self.record_lang_feature(sym::dotdot_in_tuple_patterns, pat.span);
             },
-            PatKind::Paren(..) => {
+            ast::PatKind::Paren(..) => {
                 self.record_lang_feature(sym::pattern_parentheses, pat.span);
             },
             _ => {},

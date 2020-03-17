@@ -18,7 +18,7 @@ struct Visitor<'a> {
 
 impl<'a, 'b> visit::Visitor<'b> for Visitor<'a> {
     fn visit_attribute(&mut self, attr: &ast::Attribute) {
-        if attr.has_name(sym::cfg) || attr.has_name(sym::cfg_attr) {
+        if is_active_attr(attr) {
             if let Some(ref item) = attr.meta() {
                 self.walk_cfg_metas(item);
             }
@@ -37,6 +37,26 @@ impl<'a, 'b> visit::Visitor<'b> for Visitor<'a> {
         }
 
         visit::walk_mac(self, mac);
+    }
+
+    fn visit_expr(&mut self, expr: &ast::Expr) {
+        if let ast::ExprKind::Struct(_, fields, _) = &expr.kind {
+            if fields.iter().any(|f| f.attrs.iter().any(|a| is_active_attr(a))) {
+                self.record_lang_feature(sym::struct_field_attributes, expr.span)
+            }
+        }
+
+        visit::walk_expr(self, expr);
+    }
+
+    fn visit_pat(&mut self, pat: &ast::Pat) {
+        if let ast::PatKind::Struct(_, fields, _) = &pat.kind {
+            if fields.iter().any(|f| f.attrs.iter().any(|a| is_active_attr(a))) {
+                self.record_lang_feature(sym::struct_field_attributes, pat.span)
+            }
+        }
+
+        visit::walk_pat(self, pat);
     }
 }
 
@@ -81,6 +101,10 @@ impl<'a> Visitor<'a> {
             self.record_lang_feature(feature, item.span);
         }
     }
+}
+
+fn is_active_attr(attr: &ast::Attribute) -> bool {
+    attr.has_name(sym::cfg) || attr.has_name(sym::cfg_attr)
 }
 
 pub fn walk_crate(wrapper: &mut Wrapper, krate: &ast::Crate, session: &Session) {

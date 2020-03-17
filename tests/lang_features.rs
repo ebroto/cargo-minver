@@ -48,6 +48,17 @@ test_lang_features!(
         ["3:8 3:16"]
     ),
     (
+        struct_field_attributes,
+        Edition::Edition2015,
+        "1.20.0",
+        [
+            "14:12 17:5", //
+            "18:12 21:5",
+            "23:8 26:5",
+            "27:8 30:5"
+        ]
+    ),
+    (
         repr_align,
         Edition::Edition2015,
         "1.25.0",
