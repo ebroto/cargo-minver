@@ -30,12 +30,12 @@ impl Builder {
         Self { name: name.into(), edition: Edition::Edition2015, source_files: Vec::new(), abort_on_panic: false }
     }
 
-    pub fn with_edition(&mut self, edition: Edition) -> &mut Self {
+    pub fn edition(&mut self, edition: Edition) -> &mut Self {
         self.edition = edition;
         self
     }
 
-    pub fn with_source_file<P: Into<PathBuf>>(&mut self, path: P) -> Result<&mut Self> {
+    pub fn source_file<P: Into<PathBuf>>(&mut self, path: P) -> Result<&mut Self> {
         let mut target = env::current_dir()?;
         target.push("tests");
         target.push(path.into());

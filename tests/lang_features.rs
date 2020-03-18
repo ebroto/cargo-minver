@@ -179,6 +179,12 @@ test_lang_features!(
         ["2:0 2:21"]
     ),
     (
+        panic_handler, //
+        Edition::Edition2015,
+        "1.30.0",
+        ["5:0 5:16"]
+    ),
+    (
         pattern_parentheses,
         Edition::Edition2015, //
         "1.31.0",

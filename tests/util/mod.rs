@@ -35,9 +35,12 @@ macro_rules! test_lang_feature {
         fn $name() -> anyhow::Result<()> {
             let name = stringify!($name);
             let source_file = format!("lang_files/{}.rs", name);
+
+            // NOTE: Abort on panic is needed for the panic_handler test.
             let project = util::project::Builder::new(name) //
-                .with_edition($edition)
-                .with_source_file(source_file)?
+                .edition($edition)
+                .source_file(source_file)?
+                .abort_on_panic(true)
                 .create()?;
 
             let analysis = cargo_minver::Driver::new()

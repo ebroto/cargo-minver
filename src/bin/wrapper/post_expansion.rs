@@ -31,7 +31,7 @@ impl visit::Visitor<'_> for Visitor {
 
     fn visit_attribute(&mut self, attr: &ast::Attribute) {
         let maybe_feature = match attr.name_or_empty() {
-            feature @ (sym::target_feature | sym::deprecated) => Some(feature),
+            feature @ (sym::target_feature | sym::deprecated | sym::panic_handler) => Some(feature),
             _ => None,
         };
 
