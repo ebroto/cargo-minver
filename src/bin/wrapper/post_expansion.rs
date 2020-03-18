@@ -108,6 +108,12 @@ impl visit::Visitor<'_> for Visitor {
         visit::walk_param(self, param);
     }
 
+    fn visit_generic_param(&mut self, param: &ast::GenericParam) {
+        if !param.attrs.is_empty() {
+            self.record_lang_feature(sym::generic_param_attrs, param.attrs[0].span);
+        }
+    }
+
     fn visit_expr(&mut self, expr: &ast::Expr) {
         match &expr.kind {
             ast::ExprKind::Range(_, _, ast::RangeLimits::Closed) => {
@@ -172,12 +178,6 @@ impl visit::Visitor<'_> for Visitor {
         }
 
         visit::walk_pat(self, pat);
-    }
-
-    fn visit_generic_param(&mut self, param: &ast::GenericParam) {
-        if !param.attrs.is_empty() {
-            self.record_lang_feature(sym::generic_param_attrs, param.attrs[0].span);
-        }
     }
 
     fn visit_path_segment(&mut self, span: Span, segment: &ast::PathSegment) {

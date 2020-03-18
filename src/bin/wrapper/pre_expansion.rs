@@ -9,6 +9,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::{convert_feature, convert_span, Wrapper};
 
+// NOTE: Active attributes are removed after expansion so we need to catch them here.
 struct Visitor<'a> {
     lang_features: HashMap<Symbol, HashSet<Span>>,
     parse_sess: &'a ParseSess,
@@ -18,7 +19,7 @@ struct Visitor<'a> {
 
 impl<'a, 'b> visit::Visitor<'b> for Visitor<'a> {
     fn visit_attribute(&mut self, attr: &ast::Attribute) {
-        if is_active_attr(attr) {
+        if attr.has_name(sym::cfg) || attr.has_name(sym::cfg_attr) {
             if let Some(ref item) = attr.meta() {
                 self.walk_cfg_metas(item);
             }
@@ -39,9 +40,23 @@ impl<'a, 'b> visit::Visitor<'b> for Visitor<'a> {
         visit::walk_mac(self, mac);
     }
 
+    fn visit_param(&mut self, param: &ast::Param) {
+        if !param.attrs.is_empty() {
+            self.record_lang_feature(sym::param_attrs, param.span);
+        }
+
+        visit::walk_param(self, param);
+    }
+
+    fn visit_generic_param(&mut self, param: &ast::GenericParam) {
+        if !param.attrs.is_empty() {
+            self.record_lang_feature(sym::generic_param_attrs, param.attrs[0].span);
+        }
+    }
+
     fn visit_expr(&mut self, expr: &ast::Expr) {
         if let ast::ExprKind::Struct(_, fields, _) = &expr.kind {
-            if fields.iter().any(|f| f.attrs.iter().any(|a| is_active_attr(a))) {
+            if fields.iter().any(|f| !f.attrs.is_empty()) {
                 self.record_lang_feature(sym::struct_field_attributes, expr.span)
             }
         }
@@ -51,18 +66,12 @@ impl<'a, 'b> visit::Visitor<'b> for Visitor<'a> {
 
     fn visit_pat(&mut self, pat: &ast::Pat) {
         if let ast::PatKind::Struct(_, fields, _) = &pat.kind {
-            if fields.iter().any(|f| f.attrs.iter().any(|a| is_active_attr(a))) {
+            if fields.iter().any(|f| !f.attrs.is_empty()) {
                 self.record_lang_feature(sym::struct_field_attributes, pat.span)
             }
         }
 
         visit::walk_pat(self, pat);
-    }
-
-    fn visit_generic_param(&mut self, param: &ast::GenericParam) {
-        if let Some(attr) = param.attrs.iter().find(|a| is_active_attr(a)) {
-            self.record_lang_feature(sym::generic_param_attrs, attr.span);
-        }
     }
 }
 
@@ -107,10 +116,6 @@ impl<'a> Visitor<'a> {
             self.record_lang_feature(feature, item.span);
         }
     }
-}
-
-fn is_active_attr(attr: &ast::Attribute) -> bool {
-    attr.has_name(sym::cfg) || attr.has_name(sym::cfg_attr)
 }
 
 pub fn walk_crate(wrapper: &mut Wrapper, krate: &ast::Crate, session: &Session) {

@@ -4,7 +4,7 @@ fn _fun(#[allow(unused_variables)] a: u32, _b: u32) {}
 
 struct S {}
 impl S {
-    fn _inherent_method(#[allow(unused_variables)] &self, _a: u32) {}
+    fn _inherent_method(#[cfg(any())] &self, _a: u32) {}
 }
 
 trait T {
@@ -16,6 +16,14 @@ impl T for S {
 
 #[rustfmt::skip]
 extern "C" { fn _var_fun(_a: u32, #[allow(unused_variables)] ...); }
+
+macro_rules! in_macro {
+    () => {
+        fn _more_fun(#[allow(unused_variables)] a: u32, _b: u32) {}
+    };
+}
+
+in_macro!();
 
 fn main() {
     let f1 = |#[allow(unused_variables)] x, _y| {};
