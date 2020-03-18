@@ -35,6 +35,15 @@ pub struct Options {
     /// Do not activate the `default` cargo feature
     #[structopt(long)]
     no_default_features: bool,
+    /// Check all the tests.
+    #[structopt(long)]
+    tests: bool,
+    /// Check all the examples.
+    #[structopt(long)]
+    examples: bool,
+    /// Check all the benches.
+    #[structopt(long)]
+    benches: bool,
 }
 
 #[derive(Debug)]
@@ -91,6 +100,21 @@ impl Driver {
 
     pub fn no_default_features(&mut self, value: bool) -> &mut Self {
         self.opts.no_default_features = value;
+        self
+    }
+
+    pub fn tests(&mut self, value: bool) -> &mut Self {
+        self.opts.tests = value;
+        self
+    }
+
+    pub fn examples(&mut self, value: bool) -> &mut Self {
+        self.opts.examples = value;
+        self
+    }
+
+    pub fn benches(&mut self, value: bool) -> &mut Self {
+        self.opts.benches = value;
         self
     }
 
@@ -151,7 +175,8 @@ impl Driver {
         let mut builder = command
             .env(WRAPPER_ENV, wrapper_path)
             .env(SERVER_PORT_ENV, self.opts.server_port.to_string())
-            .args(vec![toolchain, "check", "--tests", "--examples", "--benches"]);
+            .arg(toolchain)
+            .arg("check");
 
         if let Some(path) = &self.opts.manifest_path {
             builder = builder.arg("--manifest-path").arg(path);
@@ -167,6 +192,15 @@ impl Driver {
         }
         if self.opts.no_default_features {
             builder = builder.arg("--no-default-features");
+        }
+        if self.opts.tests {
+            builder = builder.arg("--tests");
+        }
+        if self.opts.examples {
+            builder = builder.arg("--examples");
+        }
+        if self.opts.benches {
+            builder = builder.arg("--benches");
         }
 
         let exit_status = builder.spawn()?.wait()?;
