@@ -22,11 +22,12 @@ pub struct Builder {
     name: String,
     edition: Edition,
     source_files: Vec<PathBuf>,
+    abort_on_panic: bool,
 }
 
 impl Builder {
     pub fn new(name: &str) -> Self {
-        Self { name: name.into(), edition: Edition::Edition2015, source_files: Vec::new() }
+        Self { name: name.into(), edition: Edition::Edition2015, source_files: Vec::new(), abort_on_panic: false }
     }
 
     pub fn with_edition(&mut self, edition: Edition) -> &mut Self {
@@ -41,6 +42,11 @@ impl Builder {
 
         self.source_files.push(target);
         Ok(self)
+    }
+
+    pub fn abort_on_panic(&mut self, value: bool) -> &mut Self {
+        self.abort_on_panic = value;
+        self
     }
 
     pub fn create(&mut self) -> Result<Project> {
@@ -61,7 +67,7 @@ impl Builder {
         }
 
         let manifest_path = project_dir.path().join("Cargo.toml");
-        let manifest = format!(
+        let mut manifest = format!(
             r#"[package]
 name = "{}"
 version = "0.0.0"
@@ -69,6 +75,15 @@ edition = "{}"
 "#,
             self.name, self.edition
         );
+
+        if self.abort_on_panic {
+            manifest.push_str(
+                r#"[profile.dev]
+panic = "abort"
+"#,
+            );
+        }
+
         fs::write(manifest_path, manifest)?;
 
         Ok(Project { _name: self.name.clone(), dir: project_dir })
