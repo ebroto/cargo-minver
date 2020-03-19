@@ -192,6 +192,18 @@ test_lang_features!(
         ["5:8 5:12"]
     ),
     (
+        self_struct_ctor,
+        Edition::Edition2015,
+        "1.32.0",
+        [
+            "7:8 7:12", //
+            "12:12 12:20",
+            "18:16 18:20",
+            "26:8 26:12",
+            "31:12 31:16"
+        ]
+    ),
+    (
         if_while_or_patterns,
         Edition::Edition2015,
         "1.33.0",

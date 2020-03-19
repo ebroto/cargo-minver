@@ -275,10 +275,18 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
     }
 
     fn visit_qpath(&mut self, qpath: &'tcx hir::QPath<'tcx>, id: hir::HirId, span: Span) {
-        // NOTE: QPath::Resolved will be checked when visiting its inner path
-        if let hir::QPath::TypeRelative(..) = qpath {
-            let res = self.tables.qpath_res(qpath, id);
-            self.process_res(res, span);
+        let res = self.tables.qpath_res(qpath, id);
+
+        match qpath {
+            hir::QPath::Resolved(..) => {
+                if let hir::def::Res::SelfCtor(_) = res {
+                    self.record_lang_feature(sym::self_struct_ctor, span);
+                }
+                // NOTE: Lib stability will be checked when visiting its inner path
+            },
+            hir::QPath::TypeRelative(..) => {
+                self.process_res(res, span);
+            },
         }
 
         intravisit::walk_qpath(self, qpath, id, span);
