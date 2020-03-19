@@ -1,10 +1,10 @@
 #[macro_use]
 mod util;
 
-use util::project::Edition;
+use util::project::{Edition, PanicBehavior};
 
 // Each entry creates a test for a language feature. Input files are taken from the lang_files directory.
-// The format is: (feature name, edition, rustc version, spans, inspect?). Inspect is just for debugging.
+// The format is: (feature name, edition, rustc version, spans, on_panic?, inspect?). Inspect is just for debugging.
 test_lang_features!(
     (
         braced_empty_structs,
@@ -182,7 +182,8 @@ test_lang_features!(
         panic_handler, //
         Edition::Edition2015,
         "1.30.0",
-        ["5:0 5:16"]
+        ["5:0 5:16"],
+        PanicBehavior::Abort
     ),
     (
         pattern_parentheses,

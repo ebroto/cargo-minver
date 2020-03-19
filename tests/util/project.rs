@@ -18,16 +18,26 @@ impl fmt::Display for Edition {
     }
 }
 
+pub enum PanicBehavior {
+    Unwind,
+    Abort,
+}
+
 pub struct Builder {
     name: String,
     edition: Edition,
     source_files: Vec<PathBuf>,
-    abort_on_panic: bool,
+    on_panic: PanicBehavior,
 }
 
 impl Builder {
     pub fn new(name: &str) -> Self {
-        Self { name: name.into(), edition: Edition::Edition2015, source_files: Vec::new(), abort_on_panic: false }
+        Self {
+            name: name.into(),
+            edition: Edition::Edition2015,
+            source_files: Vec::new(),
+            on_panic: PanicBehavior::Unwind,
+        }
     }
 
     pub fn edition(&mut self, edition: Edition) -> &mut Self {
@@ -44,8 +54,8 @@ impl Builder {
         Ok(self)
     }
 
-    pub fn abort_on_panic(&mut self, value: bool) -> &mut Self {
-        self.abort_on_panic = value;
+    pub fn on_panic(&mut self, on_panic: PanicBehavior) -> &mut Self {
+        self.on_panic = on_panic;
         self
     }
 
@@ -76,7 +86,7 @@ edition = "{}"
             self.name, self.edition
         );
 
-        if self.abort_on_panic {
+        if let PanicBehavior::Abort = self.on_panic {
             manifest.push_str(
                 r#"[profile.dev]
 panic = "abort"
@@ -85,7 +95,6 @@ panic = "abort"
         }
 
         fs::write(manifest_path, manifest)?;
-
         Ok(Project { _name: self.name.clone(), dir: project_dir })
     }
 }

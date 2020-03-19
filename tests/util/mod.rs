@@ -30,17 +30,23 @@ pub fn wrapper_path() -> Result<PathBuf> {
 }
 
 macro_rules! test_lang_feature {
-    ($port: expr, ($name: ident, $edition: expr, $version: expr, $spans: expr $(, $inspect:expr)?)) => {
+    ($port: expr, ($name: ident, $edition: expr, $version: expr, $spans: expr)) => {
+        test_lang_feature!($port, ($name, $edition, $version, $spans, PanicBehavior::Unwind));
+    };
+
+    ($port: expr, ($name: ident, $edition: expr, $version: expr, $spans: expr, $on_panic: expr)) => {
+        test_lang_feature!($port, ($name, $edition, $version, $spans, $on_panic, false));
+    };
+
+    ($port: expr, ($name: ident, $edition: expr, $version: expr, $spans: expr, $on_panic: expr, $inspect: expr)) => {
         #[test]
         fn $name() -> anyhow::Result<()> {
             let name = stringify!($name);
             let source_file = format!("lang_files/{}.rs", name);
-
-            // NOTE: Abort on panic is needed for the panic_handler test.
-            let project = util::project::Builder::new(name) //
+            let project = util::project::Builder::new(name)
                 .edition($edition)
                 .source_file(source_file)?
-                .abort_on_panic(true)
+                .on_panic($on_panic)
                 .create()?;
 
             let analysis = cargo_minver::Driver::new()
@@ -55,7 +61,9 @@ macro_rules! test_lang_feature {
             assert_eq!(Some($version.parse().unwrap()), feature.since, "expected stabilization version to match");
 
             let uses = analysis.all_feature_uses(name);
-            $(if ($inspect) { dbg!(&uses); })?
+            if $inspect {
+                dbg!(&uses);
+            }
             assert_eq!($spans.len(), uses.len(), "expected feature use count to match");
             for (expected, actual) in $spans.iter().zip(uses.iter()) {
                 assert_eq!(format!("src/main.rs {}", expected), format!("{}", actual), "expected span to match");
