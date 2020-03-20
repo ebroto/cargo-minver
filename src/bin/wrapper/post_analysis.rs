@@ -26,6 +26,7 @@ struct Visitor<'a, 'tcx> {
     tables: &'a ty::TypeckTables<'tcx>,
     empty_tables: &'a ty::TypeckTables<'tcx>,
     imported_macros: &'a HashMap<String, Stability>,
+    visiting_adt: bool,
 }
 
 impl<'a, 'tcx> Visitor<'a, 'tcx> {
@@ -41,6 +42,7 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
             tables: empty_tables,
             empty_tables,
             imported_macros,
+            visiting_adt: false,
         }
     }
 
@@ -91,6 +93,9 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
         match res {
             Res::PrimTy(hir::PrimTy::Int(ast::IntTy::I128) | hir::PrimTy::Uint(ast::UintTy::U128)) => {
                 self.record_lang_feature(sym::i128_type, span);
+            },
+            Res::SelfTy(..) if self.visiting_adt => {
+                self.record_lang_feature(sym::self_in_typedefs, span);
             },
             _ => {
                 if let Some(def_id) = res.opt_def_id() {
@@ -151,7 +156,6 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
                 let def_id = DefId { krate: cnum, index: CRATE_DEF_INDEX };
                 self.process_stability(def_id, item.span);
             },
-
             hir::ItemKind::Impl { of_trait: Some(ref t), items, .. } => {
                 if let Res::Def(DefKind::Trait, trait_did) = t.path.res {
                     for impl_item_ref in items {
@@ -168,13 +172,16 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
                     }
                 }
             },
-
+            hir::ItemKind::Enum(..) | hir::ItemKind::Struct(..) | hir::ItemKind::Union(..) => {
+                self.visiting_adt = true;
+            },
             _ => {},
         }
 
         self.with_item_tables(item.hir_id, |v| {
             intravisit::walk_item(v, item);
         });
+        self.visiting_adt = false;
     }
 
     fn visit_impl_item(&mut self, impl_item: &'tcx hir::ImplItem<'tcx>) {
