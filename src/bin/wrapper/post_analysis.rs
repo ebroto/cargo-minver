@@ -1,8 +1,7 @@
 use rustc::hir::map::Map;
 use rustc::ty::{self, TyCtxt};
 use rustc_ast::ast;
-use rustc_attr as attr;
-use rustc_attr::Stability;
+use rustc_attr::{Stability, Stable};
 use rustc_feature::ACCEPTED_FEATURES;
 use rustc_hir as hir;
 use rustc_hir::def::{DefKind, Res};
@@ -26,7 +25,7 @@ struct Visitor<'a, 'tcx> {
     tables: &'a ty::TypeckTables<'tcx>,
     empty_tables: &'a ty::TypeckTables<'tcx>,
     imported_macros: &'a HashMap<String, Stability>,
-    visiting_adt: bool,
+    visiting_adt_def: bool,
 }
 
 impl<'a, 'tcx> Visitor<'a, 'tcx> {
@@ -42,7 +41,7 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
             tables: empty_tables,
             empty_tables,
             imported_macros,
-            visiting_adt: false,
+            visiting_adt_def: false,
         }
     }
 
@@ -55,10 +54,8 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
             return;
         }
 
-        if let Some(stab) = self.tcx.lookup_stability(def_id) {
-            if let attr::Stable { .. } = stab.level {
-                self.lib_features.entry(*stab).or_default().insert(span.source_callsite());
-            }
+        if let Some(stab @ Stability { level: Stable { .. }, .. }) = self.tcx.lookup_stability(def_id) {
+            self.lib_features.entry(*stab).or_default().insert(span.source_callsite());
         }
     }
 
@@ -94,7 +91,7 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
             Res::PrimTy(hir::PrimTy::Int(ast::IntTy::I128) | hir::PrimTy::Uint(ast::UintTy::U128)) => {
                 self.record_lang_feature(sym::i128_type, span);
             },
-            Res::SelfTy(..) if self.visiting_adt => {
+            Res::SelfTy(..) if self.visiting_adt_def => {
                 self.record_lang_feature(sym::self_in_typedefs, span);
             },
             _ => {
@@ -173,7 +170,7 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
                 }
             },
             hir::ItemKind::Enum(..) | hir::ItemKind::Struct(..) | hir::ItemKind::Union(..) => {
-                self.visiting_adt = true;
+                self.visiting_adt_def = true;
             },
             _ => {},
         }
@@ -181,7 +178,7 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
         self.with_item_tables(item.hir_id, |v| {
             intravisit::walk_item(v, item);
         });
-        self.visiting_adt = false;
+        self.visiting_adt_def = false;
     }
 
     fn visit_impl_item(&mut self, impl_item: &'tcx hir::ImplItem<'tcx>) {
@@ -208,6 +205,9 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
                 if let Some(pat_ty) = self.tables.pat_ty_opt(pat) {
                     let res = self.tables.qpath_res(qpath, pat.hir_id);
                     self.process_struct(&pat_ty.kind, res, pat.span);
+                    if let Res::Def(DefKind::AssocTy, _) | Res::SelfTy(..) = res {
+                        self.record_lang_feature(sym::more_struct_aliases, pat.span);
+                    }
 
                     let fields = fields.iter().map(|f| (f.ident, f.span)).collect::<Vec<_>>();
                     self.process_fields(&pat_ty.kind, &fields);
@@ -250,6 +250,9 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
                 if let Some(expr_ty) = self.tables.expr_ty_adjusted_opt(expr) {
                     let res = self.tables.qpath_res(qpath, expr.hir_id);
                     self.process_struct(&expr_ty.kind, res, expr.span);
+                    if let Res::Def(DefKind::AssocTy, _) | Res::SelfTy(..) = res {
+                        self.record_lang_feature(sym::more_struct_aliases, expr.span);
+                    }
 
                     let idents = fields.iter().map(|f| (f.ident, f.span)).collect::<Vec<_>>();
                     self.process_fields(&expr_ty.kind, &idents);

@@ -42,6 +42,17 @@ test_lang_features!(
         ]
     ),
     (
+        more_struct_aliases,
+        Edition::Edition2015,
+        "1.16.0",
+        [
+            "7:16 7:23", //
+            "10:12 10:19",
+            "20:12 20:19",
+            "23:8 23:15"
+        ]
+    ),
+    (
         loop_break_value, //
         Edition::Edition2015,
         "1.19.0",
