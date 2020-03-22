@@ -6,6 +6,20 @@ enum A {
     Unit,
 }
 
+impl A {
+    fn fun() {
+        let _ = Self::Struct { val: 42 };
+        let _ = Self::Tuple(42);
+        let s = Self::Unit;
+
+        match s {
+            Self::Struct { .. } => {},
+            Self::Tuple(..) => {},
+            Self::Unit => {},
+        }
+    }
+}
+
 type B = A;
 
 fn main() {

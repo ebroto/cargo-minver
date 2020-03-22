@@ -115,12 +115,11 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
     }
 
     fn check_alias_enum_variants(&mut self, qpath: &hir::QPath, hir_id: hir::HirId, span: Span) {
-        if let Res::Def(DefKind::Variant, _) | Res::Def(DefKind::Ctor(CtorOf::Variant, _), _) =
-            self.tables.qpath_res(qpath, hir_id)
+        if let Res::Def(DefKind::Variant | DefKind::Ctor(CtorOf::Variant, _), _) = self.tables.qpath_res(qpath, hir_id)
         {
             if let hir::QPath::TypeRelative(ty, _) = qpath {
                 if let hir::TyKind::Path(hir::QPath::Resolved(None, ref path)) = ty.kind {
-                    if let Res::Def(DefKind::TyAlias, _) = path.res {
+                    if let Res::Def(DefKind::TyAlias, _) | Res::SelfTy(..) = path.res {
                         self.record_lang_feature(sym::type_alias_enum_variants, span);
                     }
                 }
