@@ -4,7 +4,7 @@ use rustc_ast::ast;
 use rustc_attr::{Stability, Stable};
 use rustc_feature::ACCEPTED_FEATURES;
 use rustc_hir as hir;
-use rustc_hir::def::{DefKind, Res};
+use rustc_hir::def::{CtorOf, DefKind, Res};
 use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX};
 use rustc_hir::intravisit::{self, NestedVisitorMap};
 use rustc_hir::pat_util::EnumerateAndAdjustIterator;
@@ -114,6 +114,20 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
         }
     }
 
+    fn check_alias_enum_variants(&mut self, qpath: &hir::QPath, hir_id: hir::HirId, span: Span) {
+        if let Res::Def(DefKind::Variant, _) | Res::Def(DefKind::Ctor(CtorOf::Variant, _), _) =
+            self.tables.qpath_res(qpath, hir_id)
+        {
+            if let hir::QPath::TypeRelative(ty, _) = qpath {
+                if let hir::TyKind::Path(hir::QPath::Resolved(None, ref path)) = ty.kind {
+                    if let Res::Def(DefKind::TyAlias, _) = path.res {
+                        self.record_lang_feature(sym::type_alias_enum_variants, span);
+                    }
+                }
+            }
+        }
+    }
+
     fn with_item_tables<F>(&mut self, hir_id: hir::HirId, f: F)
     where
         F: FnOnce(&mut Self),
@@ -202,18 +216,23 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
 
         match &pat.kind {
             hir::PatKind::Struct(qpath, fields, _) => {
+                self.check_alias_enum_variants(qpath, pat.hir_id, pat.span);
+
+                let res = self.tables.qpath_res(qpath, pat.hir_id);
+                if let Res::Def(DefKind::AssocTy, _) | Res::SelfTy(..) = res {
+                    self.record_lang_feature(sym::more_struct_aliases, pat.span);
+                }
+
                 if let Some(pat_ty) = self.tables.pat_ty_opt(pat) {
-                    let res = self.tables.qpath_res(qpath, pat.hir_id);
                     self.process_struct(&pat_ty.kind, res, pat.span);
-                    if let Res::Def(DefKind::AssocTy, _) | Res::SelfTy(..) = res {
-                        self.record_lang_feature(sym::more_struct_aliases, pat.span);
-                    }
 
                     let fields = fields.iter().map(|f| (f.ident, f.span)).collect::<Vec<_>>();
                     self.process_fields(&pat_ty.kind, &fields);
                 }
             },
-            hir::PatKind::TupleStruct(_, subpats, ddpos) => {
+            hir::PatKind::TupleStruct(qpath, subpats, ddpos) => {
+                self.check_alias_enum_variants(qpath, pat.hir_id, pat.span);
+
                 if let Some(pat_ty) = self.tables.pat_ty_opt(pat) {
                     match pat_ty.kind {
                         ty::Adt(def, _) if !def.is_enum() => {
@@ -225,6 +244,9 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
                         _ => {},
                     }
                 }
+            },
+            hir::PatKind::Path(qpath) => {
+                self.check_alias_enum_variants(qpath, pat.hir_id, pat.span);
             },
             _ => {},
         }
@@ -247,16 +269,22 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
                 }
             },
             hir::ExprKind::Struct(qpath, fields, _) => {
+                self.check_alias_enum_variants(qpath, expr.hir_id, expr.span);
+
+                let res = self.tables.qpath_res(qpath, expr.hir_id);
+                if let Res::Def(DefKind::AssocTy, _) | Res::SelfTy(..) = res {
+                    self.record_lang_feature(sym::more_struct_aliases, expr.span);
+                }
+
                 if let Some(expr_ty) = self.tables.expr_ty_adjusted_opt(expr) {
-                    let res = self.tables.qpath_res(qpath, expr.hir_id);
                     self.process_struct(&expr_ty.kind, res, expr.span);
-                    if let Res::Def(DefKind::AssocTy, _) | Res::SelfTy(..) = res {
-                        self.record_lang_feature(sym::more_struct_aliases, expr.span);
-                    }
 
                     let idents = fields.iter().map(|f| (f.ident, f.span)).collect::<Vec<_>>();
                     self.process_fields(&expr_ty.kind, &idents);
                 }
+            },
+            hir::ExprKind::Path(ref qpath) => {
+                self.check_alias_enum_variants(qpath, expr.hir_id, expr.span);
             },
             _ => {},
         }

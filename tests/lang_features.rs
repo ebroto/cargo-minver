@@ -279,6 +279,19 @@ test_lang_features!(
         ]
     ),
     (
+        type_alias_enum_variants, //
+        Edition::Edition2015,
+        "1.37.0",
+        [
+            "12:12 12:33", //
+            "13:12 13:20",
+            "14:12 14:19",
+            "17:8 17:24",
+            "18:8 18:20",
+            "19:8 19:15"
+        ]
+    ),
+    (
         repr_align_enum, //
         Edition::Edition2015,
         "1.37.0",
