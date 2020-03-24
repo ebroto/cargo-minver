@@ -13,11 +13,14 @@ extern crate rustc_resolve;
 extern crate rustc_session;
 extern crate rustc_span;
 
-use rustc_attr::Stability;
+mod context;
+mod post_analysis;
+mod post_expansion;
+mod pre_expansion;
+
 use rustc_driver::{Callbacks, Compilation};
 use rustc_interface::interface::Compiler;
 use rustc_interface::Queries;
-use rustc_span::source_map::SourceMap;
 
 use std::collections::{HashMap, HashSet};
 use std::process::Command;
@@ -26,11 +29,7 @@ use std::{env, str};
 use anyhow::{format_err, Context, Result};
 
 use cargo_minver::ipc::{self, Message};
-use cargo_minver::{CrateAnalysis, Feature, FeatureKind, Span, SERVER_PORT_ENV};
-
-mod post_analysis;
-mod post_expansion;
-mod pre_expansion;
+use cargo_minver::{CrateAnalysis, Feature, Span, SERVER_PORT_ENV};
 
 fn main() -> Result<()> {
     let mut args = env::args().collect::<Vec<_>>();
@@ -73,9 +72,6 @@ pub struct Wrapper {
     crate_name: String,
     features: HashSet<Feature>,
     uses: HashMap<String, HashSet<Span>>,
-    // Maps an imported macro name to its stability attributes. This is used when inspecting the HIR
-    // to relate the feature to a set of spans. See process_imported_macros for more details.
-    imported_macros: HashMap<String, Stability>,
 }
 
 impl Callbacks for Wrapper {
@@ -84,7 +80,7 @@ impl Callbacks for Wrapper {
         session.abort_if_errors();
 
         let krate = &*queries.parse().unwrap().peek();
-        pre_expansion::walk_crate(self, krate, session);
+        pre_expansion::process_crate(self, session, krate);
 
         Compilation::Continue
     }
@@ -95,10 +91,8 @@ impl Callbacks for Wrapper {
 
         let (krate, boxed_resolver, ..) = &*queries.expansion().unwrap().peek();
         boxed_resolver.borrow().borrow_mut().access(|resolver| {
-            self.imported_macros = post_expansion::process_imported_macros(session, resolver);
+            post_expansion::process_crate(self, session, krate, resolver);
         });
-
-        post_expansion::walk_crate(self, krate, session);
 
         Compilation::Continue
     }
@@ -109,7 +103,7 @@ impl Callbacks for Wrapper {
 
         self.crate_name = queries.crate_name().unwrap().peek().clone();
         queries.global_ctxt().unwrap().peek_mut().enter(|tcx| {
-            post_analysis::walk_crate(self, tcx, session.source_map());
+            post_analysis::process_crate(self, session, tcx);
         });
 
         Compilation::Continue
@@ -123,36 +117,5 @@ impl From<Wrapper> for CrateAnalysis {
             features: wrapper.features.into_iter().collect(),
             uses: wrapper.uses.into_iter().map(|(k, v)| (k, v.into_iter().collect())).collect(),
         }
-    }
-}
-
-// We can't implement `From` for `Feature` and `Span` because of the orphan rules,
-// so the conversions are implemented here as free functions.
-
-fn convert_span(source_map: &SourceMap, span: rustc_span::Span) -> Span {
-    let start = source_map.lookup_char_pos(span.lo());
-    let end = source_map.lookup_char_pos(span.hi());
-
-    Span {
-        file_name: start.file.name.to_string(),
-        start_line: start.line,
-        start_col: start.col.0,
-        end_line: end.line,
-        end_col: end.col.0,
-    }
-}
-
-fn convert_feature(feature: &rustc_feature::Feature) -> Feature {
-    Feature { name: feature.name.to_string(), kind: FeatureKind::Lang, since: Some(feature.since.parse().unwrap()) }
-}
-
-fn convert_stability(stab: rustc_attr::Stability) -> Feature {
-    Feature {
-        name: stab.feature.to_string(),
-        kind: FeatureKind::Lib,
-        since: match stab.level {
-            rustc_attr::StabilityLevel::Stable { since } => Some(since.as_str().parse().unwrap()),
-            _ => None,
-        },
     }
 }
