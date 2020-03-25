@@ -7,6 +7,12 @@ use util::project::{Edition, PanicBehavior};
 // The format is: (feature name, edition, rustc version, spans, on_panic?, inspect?). Inspect is just for debugging.
 test_lang_features!(
     (
+        no_std, //
+        Edition::Edition2015,
+        "1.6.0",
+        ["1:0 1:10"]
+    ),
+    (
         braced_empty_structs,
         Edition::Edition2015,
         "1.8.0",
