@@ -21,8 +21,7 @@ impl<'a> Visitor<'a> {
     fn walk_cfg_metas(&mut self, item: &ast::MetaItem) {
         match &item.kind {
             ast::MetaItemKind::List(items) => {
-                let name = item.name_or_empty();
-                if name == sym::cfg_attr && items.len() != 2 {
+                if items.len() != 2 && item.name_or_empty() == sym::cfg_attr {
                     self.ctx.record_lang_feature(sym::cfg_attr_multi, item.span);
                 }
 
@@ -64,7 +63,8 @@ impl<'a, 'ast> visit::Visitor<'ast> for Visitor<'a> {
     }
 
     fn visit_mac(&mut self, mac: &ast::MacCall) {
-        if mac.path.segments.len() == 1 && mac.path.segments[0].ident.name == sym::cfg {
+        let segments = &mac.path.segments;
+        if segments.len() == 1 && segments[0].ident.name == sym::cfg {
             let tts = mac.args.inner_tokens();
             let mut parser = rustc_parse::stream_to_parser(self.parse_sess, tts, MACRO_ARGUMENTS);
             if let Ok(cfg) = parser.parse_meta_item() {
@@ -87,6 +87,8 @@ impl<'a, 'ast> visit::Visitor<'ast> for Visitor<'a> {
         if !param.attrs.is_empty() {
             self.ctx.record_lang_feature(sym::generic_param_attrs, param.attrs[0].span);
         }
+
+        visit::walk_generic_param(self, param);
     }
 
     fn visit_expr(&mut self, expr: &ast::Expr) {
@@ -112,7 +114,6 @@ impl<'a, 'ast> visit::Visitor<'ast> for Visitor<'a> {
 
 pub fn process_crate(wrapper: &mut Wrapper, session: &Session, krate: &ast::Crate) {
     let mut ctx = Context::default();
-
     let mut visitor = Visitor::new(&mut ctx, &session.parse_sess);
     visit::walk_crate(&mut visitor, &krate);
 

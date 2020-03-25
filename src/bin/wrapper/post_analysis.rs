@@ -1,5 +1,5 @@
 use rustc::hir::map::Map;
-use rustc::ty::{self, TyCtxt};
+use rustc::ty::{self, TyCtxt, TypeckTables};
 use rustc_ast::ast;
 use rustc_attr::{Stability, Stable};
 use rustc_hir as hir;
@@ -18,13 +18,13 @@ use super::{context::Context, Wrapper};
 struct Visitor<'a, 'tcx> {
     ctx: &'a mut Context,
     tcx: TyCtxt<'tcx>,
-    tables: &'a ty::TypeckTables<'tcx>,
-    empty_tables: &'a ty::TypeckTables<'tcx>,
+    tables: &'a TypeckTables<'tcx>,
+    empty_tables: &'a TypeckTables<'tcx>,
     visiting_adt_def: bool,
 }
 
 impl<'a, 'tcx> Visitor<'a, 'tcx> {
-    pub fn new(ctx: &'a mut Context, tcx: TyCtxt<'tcx>, empty_tables: &'a ty::TypeckTables<'tcx>) -> Self {
+    pub fn new(ctx: &'a mut Context, tcx: TyCtxt<'tcx>, empty_tables: &'a TypeckTables<'tcx>) -> Self {
         Visitor { ctx, tcx, tables: empty_tables, empty_tables, visiting_adt_def: false }
     }
 
@@ -108,7 +108,7 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
     }
 }
 
-impl<'a, 'tcx> intravisit::Visitor<'tcx> for Visitor<'a, 'tcx> {
+impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, 'tcx> {
     type Map = Map<'tcx>;
 
     fn nested_visit_map(&mut self) -> NestedVisitorMap<Self::Map> {
@@ -275,7 +275,7 @@ pub fn process_crate<'tcx>(wrapper: &mut Wrapper, session: &Session, tcx: TyCtxt
     use intravisit::Visitor as _;
 
     let mut ctx = Context::default();
-    let empty_tables = ty::TypeckTables::empty(None);
+    let empty_tables = TypeckTables::empty(None);
     let mut visitor = Visitor::new(&mut ctx, tcx, &empty_tables);
     tcx.hir().krate().visit_all_item_likes(&mut visitor.as_deep_visitor());
 
