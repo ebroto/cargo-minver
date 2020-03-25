@@ -108,12 +108,7 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
     }
 
     fn visit_attribute(&mut self, attr: &ast::Attribute) {
-        let maybe_feature = match attr.name_or_empty() {
-            feature @ (sym::target_feature | sym::deprecated | sym::panic_handler) => Some(feature),
-            _ => None,
-        };
-
-        if let Some(feature) = maybe_feature {
+        if let feature @ (sym::target_feature | sym::deprecated | sym::panic_handler) = attr.name_or_empty() {
             self.ctx.record_lang_feature(feature, attr.span);
         }
 
