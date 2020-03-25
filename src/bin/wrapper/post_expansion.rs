@@ -32,42 +32,36 @@ impl<'a, 'res> Visitor<'a, 'res> {
     }
 
     fn check_repr(&mut self, item: &ast::Item) {
-        let metas = item
-            .attrs
-            .iter()
-            .filter(|a| a.has_name(sym::repr))
-            .filter_map(|a| a.meta_item_list())
-            .flatten()
-            .collect::<Vec<_>>();
+        let metas = item.attrs.iter().filter(|a| a.has_name(sym::repr)).filter_map(|a| a.meta_item_list()).flatten();
 
-        if metas.iter().any(|m| m.name_or_empty() == sym::transparent) {
-            // NOTE: repr transparent for unions is still unstable
-            match &item.kind {
-                ast::ItemKind::Struct(..) => {
-                    self.ctx.record_lang_feature(sym::repr_transparent, item.span);
+        for meta in metas {
+            match meta.name_or_empty() {
+                sym::transparent => match &item.kind {
+                    // NOTE: repr transparent for unions is still unstable
+                    ast::ItemKind::Struct(..) => {
+                        self.ctx.record_lang_feature(sym::repr_transparent, item.span);
+                    },
+                    ast::ItemKind::Enum(..) => {
+                        self.ctx.record_lang_feature(sym::transparent_enums, item.span);
+                    },
+                    _ => {},
                 },
-                ast::ItemKind::Enum(..) => {
-                    self.ctx.record_lang_feature(sym::transparent_enums, item.span);
+                sym::align => match &item.kind {
+                    ast::ItemKind::Struct(..) | ast::ItemKind::Union(..) => {
+                        self.ctx.record_lang_feature(sym::repr_align, item.span);
+                    },
+                    ast::ItemKind::Enum(..) => {
+                        self.ctx.record_lang_feature(sym::repr_align_enum, item.span);
+                    },
+                    _ => {},
                 },
                 _ => {},
             }
-        }
 
-        if metas.iter().any(|m| m.name_or_empty() == sym::align) {
-            match &item.kind {
-                ast::ItemKind::Struct(..) | ast::ItemKind::Union(..) => {
-                    self.ctx.record_lang_feature(sym::repr_align, item.span);
-                },
-                ast::ItemKind::Enum(..) => {
-                    self.ctx.record_lang_feature(sym::repr_align_enum, item.span);
-                },
-                _ => {},
-            }
-        }
-
-        if metas.iter().any(|m| matches!(m.name_value_literal(), Some((sym::packed, _)))) {
-            if let ast::ItemKind::Struct(..) = item.kind {
-                self.ctx.record_lang_feature(sym::repr_packed, item.span);
+            if let Some((sym::packed, _)) = meta.name_value_literal() {
+                if let ast::ItemKind::Struct(..) = item.kind {
+                    self.ctx.record_lang_feature(sym::repr_packed, item.span);
+                }
             }
         }
     }
