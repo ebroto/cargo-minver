@@ -59,6 +59,12 @@ test_lang_features!(
         ]
     ),
     (
+        windows_subsystem, //
+        Edition::Edition2015,
+        "1.18.0",
+        ["1:0 1:33"]
+    ),
+    (
         loop_break_value, //
         Edition::Edition2015,
         "1.19.0",
