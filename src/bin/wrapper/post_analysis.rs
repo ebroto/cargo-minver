@@ -3,7 +3,7 @@ use rustc::ty::{self, TyCtxt, TypeckTables};
 use rustc_ast::ast;
 use rustc_attr::{Stability, Stable};
 use rustc_hir as hir;
-use rustc_hir::def::{CtorOf, DefKind, Res};
+use rustc_hir::def::{CtorKind, CtorOf, DefKind, Res};
 use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX};
 use rustc_hir::intravisit::{self, NestedVisitorMap};
 use rustc_hir::pat_util::EnumerateAndAdjustIterator;
@@ -44,6 +44,9 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
             if variant.fields.is_empty() {
                 self.ctx.record_lang_feature(sym::braced_empty_structs, span);
             }
+            if let CtorKind::Fn = variant.ctor_kind {
+                self.ctx.record_lang_feature(sym::relaxed_adts, span);
+            }
         }
     }
 
@@ -73,11 +76,11 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
             Res::SelfTy(..) if self.visiting_adt_def => {
                 self.ctx.record_lang_feature(sym::self_in_typedefs, span);
             },
-            _ => {
-                if let Some(def_id) = res.opt_def_id() {
-                    self.process_stability(def_id, span);
-                }
-            },
+            _ => {},
+        }
+
+        if let Some(def_id) = res.opt_def_id() {
+            self.process_stability(def_id, span);
         }
     }
 

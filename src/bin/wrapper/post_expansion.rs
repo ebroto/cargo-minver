@@ -66,6 +66,18 @@ impl<'a, 'res> Visitor<'a, 'res> {
         }
     }
 
+    fn check_variant_data(&mut self, variant_data: &ast::VariantData, span: Span) {
+        match variant_data {
+            ast::VariantData::Struct(fields, _) if fields.is_empty() => {
+                self.ctx.record_lang_feature(sym::braced_empty_structs, span);
+            },
+            ast::VariantData::Tuple(fields, _) if fields.is_empty() => {
+                self.ctx.record_lang_feature(sym::relaxed_adts, span);
+            },
+            _ => {},
+        }
+    }
+
     fn check_macro_use(&mut self, span: Span) {
         if !span.from_expansion() {
             return;
@@ -94,6 +106,10 @@ impl<'a, 'res> Visitor<'a, 'res> {
             }
         }
     }
+}
+
+fn starts_with_digit(s: &str) -> bool {
+    s.as_bytes().first().cloned().map_or(false, |b| b >= b'0' && b <= b'9')
 }
 
 impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
@@ -131,13 +147,9 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
                 }
             },
             ast::ItemKind::Struct(variant_data, _) => {
-                if let ast::VariantData::Struct(fields, _) = variant_data {
-                    if fields.is_empty() {
-                        self.ctx.record_lang_feature(sym::braced_empty_structs, item.span);
-                    }
-                }
                 self.check_non_exhaustive(item);
                 self.check_repr(item);
+                self.check_variant_data(variant_data, item.span);
             },
             ast::ItemKind::Enum(..) => {
                 self.check_non_exhaustive(item);
@@ -160,12 +172,7 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
     }
 
     fn visit_variant(&mut self, variant: &ast::Variant) {
-        if let ast::VariantData::Struct(fields, _) = &variant.data {
-            if fields.is_empty() {
-                self.ctx.record_lang_feature(sym::braced_empty_structs, variant.span);
-            }
-        }
-
+        self.check_variant_data(&variant.data, variant.span);
         visit::walk_variant(self, variant);
     }
 
@@ -238,6 +245,9 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
                 if fields.iter().any(|f| !f.attrs.is_empty()) {
                     self.ctx.record_lang_feature(sym::struct_field_attributes, expr.span)
                 }
+                if fields.iter().any(|f| starts_with_digit(&f.ident.name.as_str())) {
+                    self.ctx.record_lang_feature(sym::relaxed_adts, expr.span);
+                }
             },
             _ => {},
         }
@@ -259,6 +269,9 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
             ast::PatKind::Struct(_, fields, _) => {
                 if fields.iter().any(|f| !f.attrs.is_empty()) {
                     self.ctx.record_lang_feature(sym::struct_field_attributes, pat.span)
+                }
+                if fields.iter().any(|f| starts_with_digit(&f.ident.name.as_str())) {
+                    self.ctx.record_lang_feature(sym::relaxed_adts, pat.span);
                 }
             },
             ast::PatKind::Tuple(ps) if has_rest(ps) => {
