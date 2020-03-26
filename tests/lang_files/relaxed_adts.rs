@@ -30,6 +30,7 @@ fn main() {
     let ets = EmptyTS {};
     match ets {
         EmptyTS {} => {},
+        EmptyTS() => {},
     }
 
     // Tuple enum variant
@@ -41,6 +42,7 @@ fn main() {
         E::TV { 0: 42 } => {},
         E::TV { .. } => {},
         E::EmptyTV {} => {},
+        E::EmptyTV() => {},
     }
 
     // Ignored struct and struct-like enum variant

@@ -282,8 +282,12 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
             ast::PatKind::Tuple(ps) if has_rest(ps) => {
                 self.ctx.record_lang_feature(sym::dotdot_in_tuple_patterns, pat.span);
             },
-            ast::PatKind::TupleStruct(_, ps) if ps.len() > 1 && has_rest(ps) => {
-                self.ctx.record_lang_feature(sym::dotdot_in_tuple_patterns, pat.span);
+            ast::PatKind::TupleStruct(_, ps) => {
+                if ps.is_empty() {
+                    self.ctx.record_lang_feature(sym::relaxed_adts, pat.span);
+                } else if ps.len() > 1 && has_rest(ps) {
+                    self.ctx.record_lang_feature(sym::dotdot_in_tuple_patterns, pat.span);
+                }
             },
             ast::PatKind::Paren(..) => {
                 self.ctx.record_lang_feature(sym::pattern_parentheses, pat.span);
