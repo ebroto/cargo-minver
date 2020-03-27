@@ -183,6 +183,12 @@ test_lang_features!(
         ]
     ),
     (
+        dyn_trait, //
+        Edition::Edition2015,
+        "1.27.0",
+        ["5:11 5:16"]
+    ),
+    (
         repr_transparent,
         Edition::Edition2015,
         "1.28.0",

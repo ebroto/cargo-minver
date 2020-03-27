@@ -209,6 +209,11 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
 
     fn visit_ty(&mut self, ty: &ast::Ty) {
         self.check_macro_use(ty.span);
+
+        if let ast::TyKind::TraitObject(_, ast::TraitObjectSyntax::Dyn) = ty.kind {
+            self.ctx.record_lang_feature(sym::dyn_trait, ty.span);
+        }
+
         visit::walk_ty(self, ty);
     }
 
