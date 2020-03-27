@@ -4,10 +4,10 @@ use rustc_ast::ast;
 use rustc_attr::{Stability, Stable};
 use rustc_hir as hir;
 use rustc_hir::def::{CtorKind, CtorOf, DefKind, Res};
-use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX};
+use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX, LOCAL_CRATE};
 use rustc_hir::intravisit::{self, NestedVisitorMap};
 use rustc_hir::pat_util::EnumerateAndAdjustIterator;
-use rustc_session::Session;
+use rustc_session::config::EntryFnType;
 use rustc_span::symbol::{sym, Ident};
 use rustc_span::Span;
 
@@ -274,13 +274,27 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, 'tcx> {
     }
 }
 
-pub fn process_crate<'tcx>(wrapper: &mut Wrapper, session: &Session, tcx: TyCtxt<'tcx>) {
+pub fn process_crate<'tcx>(wrapper: &mut Wrapper, tcx: TyCtxt<'tcx>) {
     use intravisit::Visitor as _;
-
     let mut ctx = Context::default();
+
+    if let Some((main_did, EntryFnType::Main)) = tcx.entry_fn(LOCAL_CRATE) {
+        let hir_id = tcx.hir().as_local_hir_id(main_did).unwrap();
+        if let Some(fn_sig) = tcx.hir().fn_sig_by_hir_id(hir_id) {
+            let output = &fn_sig.decl.output;
+            match output {
+                hir::FnRetTy::DefaultReturn(_) => {},
+                hir::FnRetTy::Return(hir::Ty { kind: hir::TyKind::Tup(elems), .. }) if elems.is_empty() => {},
+                _ => {
+                    ctx.record_lang_feature(sym::termination_trait, output.span());
+                },
+            }
+        }
+    }
+
     let empty_tables = TypeckTables::empty(None);
     let mut visitor = Visitor::new(&mut ctx, tcx, &empty_tables);
     tcx.hir().krate().visit_all_item_likes(&mut visitor.as_deep_visitor());
 
-    ctx.dump(wrapper, session);
+    ctx.dump(wrapper, tcx.sess);
 }

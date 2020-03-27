@@ -140,6 +140,12 @@ test_lang_features!(
         ]
     ),
     (
+        termination_trait, //
+        Edition::Edition2015,
+        "1.26.0",
+        ["3:13 3:30"]
+    ),
+    (
         cfg_target_feature,
         Edition::Edition2015,
         "1.27.0",

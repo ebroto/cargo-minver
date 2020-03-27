@@ -98,12 +98,11 @@ impl Callbacks for Wrapper {
     }
 
     fn after_analysis<'tcx>(&mut self, compiler: &Compiler, queries: &'tcx Queries<'tcx>) -> Compilation {
-        let session = compiler.session();
-        session.abort_if_errors();
+        compiler.session().abort_if_errors();
 
         self.crate_name = queries.crate_name().unwrap().peek().clone();
         queries.global_ctxt().unwrap().peek_mut().enter(|tcx| {
-            post_analysis::process_crate(self, session, tcx);
+            post_analysis::process_crate(self, tcx);
         });
 
         Compilation::Continue
