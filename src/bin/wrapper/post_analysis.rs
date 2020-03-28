@@ -274,10 +274,7 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, 'tcx> {
     }
 }
 
-pub fn process_crate<'tcx>(wrapper: &mut Wrapper, tcx: TyCtxt<'tcx>) {
-    use intravisit::Visitor as _;
-    let mut ctx = Context::default();
-
+fn check_termination_trait(ctx: &mut Context, tcx: TyCtxt) {
     if let Some((main_did, EntryFnType::Main)) = tcx.entry_fn(LOCAL_CRATE) {
         let hir_id = tcx.hir().as_local_hir_id(main_did).unwrap();
         if let Some(fn_sig) = tcx.hir().fn_sig_by_hir_id(hir_id) {
@@ -291,6 +288,13 @@ pub fn process_crate<'tcx>(wrapper: &mut Wrapper, tcx: TyCtxt<'tcx>) {
             }
         }
     }
+}
+
+pub fn process_crate(wrapper: &mut Wrapper, tcx: TyCtxt) {
+    use intravisit::Visitor as _;
+
+    let mut ctx = Context::default();
+    check_termination_trait(&mut ctx, tcx);
 
     let empty_tables = TypeckTables::empty(None);
     let mut visitor = Visitor::new(&mut ctx, tcx, &empty_tables);
