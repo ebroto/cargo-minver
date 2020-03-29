@@ -3,29 +3,29 @@ use rustc_parse::{self, MACRO_ARGUMENTS};
 use rustc_session::{parse::ParseSess, Session};
 use rustc_span::symbol::{sym, Symbol};
 
-use super::{context::Context, Wrapper};
+use super::{context::StabilityContext, Wrapper};
 
 // NOTE: This visitor is intended to be used only to catch active attributes before they are removed,
 // but the approach is not valid as it won't catch attributes generated as a result of macro expansion.
 // Another solution is needed.
 
-struct Visitor<'a> {
-    ctx: &'a mut Context,
+struct Visitor<'a, 'scx> {
+    stab_ctx: &'a mut StabilityContext<'scx>,
     parse_sess: &'a ParseSess,
     // NOTE: sym::target_vendor does not exist
     target_vendor: Symbol,
 }
 
-impl<'a> Visitor<'a> {
-    fn new(ctx: &'a mut Context, parse_sess: &'a ParseSess) -> Self {
-        Self { ctx, parse_sess, target_vendor: Symbol::intern("target_vendor") }
+impl<'a, 'scx> Visitor<'a, 'scx> {
+    fn new(stab_ctx: &'a mut StabilityContext<'scx>, parse_sess: &'a ParseSess) -> Self {
+        Self { stab_ctx, parse_sess, target_vendor: Symbol::intern("target_vendor") }
     }
 
     fn walk_cfg_metas(&mut self, item: &ast::MetaItem) {
         match &item.kind {
             ast::MetaItemKind::List(items) => {
                 if items.len() != 2 && item.name_or_empty() == sym::cfg_attr {
-                    self.ctx.record_lang_feature(sym::cfg_attr_multi, item.span);
+                    self.stab_ctx.record_lang_feature(sym::cfg_attr_multi, item.span);
                 }
 
                 for nested in items {
@@ -49,12 +49,12 @@ impl<'a> Visitor<'a> {
         };
 
         if let Some(feature) = maybe_feature {
-            self.ctx.record_lang_feature(feature, item.span);
+            self.stab_ctx.record_lang_feature(feature, item.span);
         }
     }
 }
 
-impl<'a, 'ast> visit::Visitor<'ast> for Visitor<'a> {
+impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
     fn visit_attribute(&mut self, attr: &ast::Attribute) {
         if attr.has_name(sym::cfg) || attr.has_name(sym::cfg_attr) {
             if let Some(ref item) = attr.meta() {
@@ -80,7 +80,7 @@ impl<'a, 'ast> visit::Visitor<'ast> for Visitor<'a> {
 
     fn visit_param(&mut self, param: &ast::Param) {
         if !param.attrs.is_empty() {
-            self.ctx.record_lang_feature(sym::param_attrs, param.span);
+            self.stab_ctx.record_lang_feature(sym::param_attrs, param.span);
         }
 
         visit::walk_param(self, param);
@@ -88,7 +88,7 @@ impl<'a, 'ast> visit::Visitor<'ast> for Visitor<'a> {
 
     fn visit_generic_param(&mut self, param: &ast::GenericParam) {
         if !param.attrs.is_empty() {
-            self.ctx.record_lang_feature(sym::generic_param_attrs, param.attrs[0].span);
+            self.stab_ctx.record_lang_feature(sym::generic_param_attrs, param.attrs[0].span);
         }
 
         visit::walk_generic_param(self, param);
@@ -97,7 +97,7 @@ impl<'a, 'ast> visit::Visitor<'ast> for Visitor<'a> {
     fn visit_expr(&mut self, expr: &ast::Expr) {
         if let ast::ExprKind::Struct(_, fields, _) = &expr.kind {
             if fields.iter().any(|f| !f.attrs.is_empty()) {
-                self.ctx.record_lang_feature(sym::struct_field_attributes, expr.span)
+                self.stab_ctx.record_lang_feature(sym::struct_field_attributes, expr.span)
             }
         }
 
@@ -107,7 +107,7 @@ impl<'a, 'ast> visit::Visitor<'ast> for Visitor<'a> {
     fn visit_pat(&mut self, pat: &ast::Pat) {
         if let ast::PatKind::Struct(_, fields, _) = &pat.kind {
             if fields.iter().any(|f| !f.attrs.is_empty()) {
-                self.ctx.record_lang_feature(sym::struct_field_attributes, pat.span)
+                self.stab_ctx.record_lang_feature(sym::struct_field_attributes, pat.span)
             }
         }
 
@@ -116,9 +116,9 @@ impl<'a, 'ast> visit::Visitor<'ast> for Visitor<'a> {
 }
 
 pub fn process_crate(wrapper: &mut Wrapper, session: &Session, krate: &ast::Crate) {
-    let mut ctx = Context::default();
-    let mut visitor = Visitor::new(&mut ctx, &session.parse_sess);
+    let mut stab_ctx = StabilityContext::new(session);
+    let mut visitor = Visitor::new(&mut stab_ctx, &session.parse_sess);
     visit::walk_crate(&mut visitor, &krate);
 
-    ctx.dump(wrapper, session);
+    stab_ctx.dump(wrapper);
 }

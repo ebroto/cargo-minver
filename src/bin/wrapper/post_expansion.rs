@@ -11,23 +11,27 @@ use rustc_span::Span;
 
 use std::collections::HashMap;
 
-use super::{context::Context, Wrapper};
+use super::{context::StabilityContext, Wrapper};
 
-struct Visitor<'a, 'res> {
-    ctx: &'a mut Context,
+struct Visitor<'a, 'scx, 'res> {
+    stab_ctx: &'a mut StabilityContext<'scx>,
     resolver: &'a mut Resolver<'res>,
     source_map: &'a SourceMap,
     imported_macros: HashMap<Symbol, Option<Stability>>,
 }
 
-impl<'a, 'res> Visitor<'a, 'res> {
-    fn new(ctx: &'a mut Context, resolver: &'a mut Resolver<'res>, source_map: &'a SourceMap) -> Self {
-        Self { ctx, resolver, source_map, imported_macros: Default::default() }
+impl<'a, 'scx, 'res> Visitor<'a, 'scx, 'res> {
+    fn new(
+        stab_ctx: &'a mut StabilityContext<'scx>,
+        resolver: &'a mut Resolver<'res>,
+        source_map: &'a SourceMap,
+    ) -> Self {
+        Self { stab_ctx, resolver, source_map, imported_macros: Default::default() }
     }
 
     fn check_non_exhaustive(&mut self, item: &ast::Item) {
         if item.attrs.iter().any(|a| a.has_name(sym::non_exhaustive)) {
-            self.ctx.record_lang_feature(sym::non_exhaustive, item.span);
+            self.stab_ctx.record_lang_feature(sym::non_exhaustive, item.span);
         }
     }
 
@@ -39,19 +43,19 @@ impl<'a, 'res> Visitor<'a, 'res> {
                 sym::transparent => match &item.kind {
                     // NOTE: repr transparent for unions is still unstable
                     ast::ItemKind::Struct(..) => {
-                        self.ctx.record_lang_feature(sym::repr_transparent, item.span);
+                        self.stab_ctx.record_lang_feature(sym::repr_transparent, item.span);
                     },
                     ast::ItemKind::Enum(..) => {
-                        self.ctx.record_lang_feature(sym::transparent_enums, item.span);
+                        self.stab_ctx.record_lang_feature(sym::transparent_enums, item.span);
                     },
                     _ => {},
                 },
                 sym::align => match &item.kind {
                     ast::ItemKind::Struct(..) | ast::ItemKind::Union(..) => {
-                        self.ctx.record_lang_feature(sym::repr_align, item.span);
+                        self.stab_ctx.record_lang_feature(sym::repr_align, item.span);
                     },
                     ast::ItemKind::Enum(..) => {
-                        self.ctx.record_lang_feature(sym::repr_align_enum, item.span);
+                        self.stab_ctx.record_lang_feature(sym::repr_align_enum, item.span);
                     },
                     _ => {},
                 },
@@ -60,7 +64,7 @@ impl<'a, 'res> Visitor<'a, 'res> {
 
             if let Some((sym::packed, _)) = meta.name_value_literal() {
                 if let ast::ItemKind::Struct(..) = item.kind {
-                    self.ctx.record_lang_feature(sym::repr_packed, item.span);
+                    self.stab_ctx.record_lang_feature(sym::repr_packed, item.span);
                 }
             }
         }
@@ -69,10 +73,10 @@ impl<'a, 'res> Visitor<'a, 'res> {
     fn check_variant_data(&mut self, variant_data: &ast::VariantData, span: Span) {
         match variant_data {
             ast::VariantData::Struct(fields, _) if fields.is_empty() => {
-                self.ctx.record_lang_feature(sym::braced_empty_structs, span);
+                self.stab_ctx.record_lang_feature(sym::braced_empty_structs, span);
             },
             ast::VariantData::Tuple(fields, _) if fields.is_empty() => {
-                self.ctx.record_lang_feature(sym::relaxed_adts, span);
+                self.stab_ctx.record_lang_feature(sym::relaxed_adts, span);
             },
             _ => {},
         }
@@ -102,7 +106,7 @@ impl<'a, 'res> Visitor<'a, 'res> {
             });
 
             if let Some(stab) = maybe_stab {
-                self.ctx.record_lib_feature(*stab, span.source_callsite());
+                self.stab_ctx.record_lib_feature(*stab, span.source_callsite());
             }
         }
     }
@@ -112,11 +116,11 @@ fn starts_with_digit(s: &str) -> bool {
     s.as_bytes().first().cloned().map_or(false, |b| b >= b'0' && b <= b'9')
 }
 
-impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
+impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
     fn visit_use_tree(&mut self, use_tree: &ast::UseTree, node_id: ast::NodeId, _nested: bool) {
         if let ast::UseTreeKind::Simple(Some(ident), ..) = use_tree.kind {
             if ident.name == kw::Underscore {
-                self.ctx.record_lang_feature(sym::underscore_imports, ident.span);
+                self.stab_ctx.record_lang_feature(sym::underscore_imports, ident.span);
             }
         }
 
@@ -132,7 +136,7 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
         | sym::panic_handler
         | sym::windows_subsystem) = attr.name_or_empty()
         {
-            self.ctx.record_lang_feature(feature, attr.span);
+            self.stab_ctx.record_lang_feature(feature, attr.span);
         }
 
         visit::walk_attribute(self, attr);
@@ -148,7 +152,7 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
         match &item.kind {
             ast::ItemKind::ExternCrate(_) => {
                 if item.ident.name == kw::Underscore {
-                    self.ctx.record_lang_feature(sym::underscore_imports, item.ident.span);
+                    self.stab_ctx.record_lang_feature(sym::underscore_imports, item.ident.span);
                 }
             },
             ast::ItemKind::Struct(variant_data, _) => {
@@ -165,7 +169,7 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
             },
             ast::ItemKind::Static(..) => {
                 if item.attrs.iter().any(|a| a.has_name(sym::used)) {
-                    self.ctx.record_lang_feature(sym::used, item.span);
+                    self.stab_ctx.record_lang_feature(sym::used, item.span);
                 }
                 // NOTE: Athough declared as a lang feature, the global_allocator attribute
                 // macro is defined in libcore and will be detected as a library feature.
@@ -184,7 +188,7 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
     fn visit_fn(&mut self, fn_kind: FnKind, span: Span, _node_id: ast::NodeId) {
         if let Some(header) = fn_kind.header() {
             if header.asyncness.is_async() {
-                self.ctx.record_lang_feature(sym::async_await, span);
+                self.stab_ctx.record_lang_feature(sym::async_await, span);
             }
         }
 
@@ -193,7 +197,7 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
 
     fn visit_param(&mut self, param: &ast::Param) {
         if !param.attrs.is_empty() {
-            self.ctx.record_lang_feature(sym::param_attrs, param.span);
+            self.stab_ctx.record_lang_feature(sym::param_attrs, param.span);
         }
 
         visit::walk_param(self, param);
@@ -201,7 +205,7 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
 
     fn visit_generic_param(&mut self, param: &ast::GenericParam) {
         if !param.attrs.is_empty() {
-            self.ctx.record_lang_feature(sym::generic_param_attrs, param.attrs[0].span);
+            self.stab_ctx.record_lang_feature(sym::generic_param_attrs, param.attrs[0].span);
         }
 
         visit::walk_generic_param(self, param);
@@ -211,7 +215,7 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
         self.check_macro_use(ty.span);
 
         if let ast::TyKind::TraitObject(_, ast::TraitObjectSyntax::Dyn) = ty.kind {
-            self.ctx.record_lang_feature(sym::dyn_trait, ty.span);
+            self.stab_ctx.record_lang_feature(sym::dyn_trait, ty.span);
         }
 
         visit::walk_ty(self, ty);
@@ -232,31 +236,31 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
 
         match &expr.kind {
             ast::ExprKind::Range(_, _, ast::RangeLimits::Closed) => {
-                self.ctx.record_lang_feature(sym::inclusive_range_syntax, expr.span);
+                self.stab_ctx.record_lang_feature(sym::inclusive_range_syntax, expr.span);
             },
             ast::ExprKind::Break(_, Some(_)) => {
-                self.ctx.record_lang_feature(sym::loop_break_value, expr.span);
+                self.stab_ctx.record_lang_feature(sym::loop_break_value, expr.span);
             },
             ast::ExprKind::Async(..) | ast::ExprKind::Await(_) => {
-                self.ctx.record_lang_feature(sym::async_await, expr.span);
+                self.stab_ctx.record_lang_feature(sym::async_await, expr.span);
             },
             ast::ExprKind::Lit(lit) => {
                 use ast::LitIntType::{Signed, Unsigned};
                 if let ast::LitKind::Int(_, Signed(ast::IntTy::I128) | Unsigned(ast::UintTy::U128)) = lit.kind {
-                    self.ctx.record_lang_feature(sym::i128_type, expr.span);
+                    self.stab_ctx.record_lang_feature(sym::i128_type, expr.span);
                 }
             },
             ast::ExprKind::Let(pat, _) => {
                 if let ast::PatKind::Or(_) = pat.kind {
-                    self.ctx.record_lang_feature(sym::if_while_or_patterns, pat.span);
+                    self.stab_ctx.record_lang_feature(sym::if_while_or_patterns, pat.span);
                 }
             },
             ast::ExprKind::Struct(_, fields, _) => {
                 if fields.iter().any(|f| !f.attrs.is_empty()) {
-                    self.ctx.record_lang_feature(sym::struct_field_attributes, expr.span)
+                    self.stab_ctx.record_lang_feature(sym::struct_field_attributes, expr.span)
                 }
                 if fields.iter().any(|f| starts_with_digit(&f.ident.name.as_str())) {
-                    self.ctx.record_lang_feature(sym::relaxed_adts, expr.span);
+                    self.stab_ctx.record_lang_feature(sym::relaxed_adts, expr.span);
                 }
             },
             _ => {},
@@ -274,28 +278,28 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
 
         match &pat.kind {
             ast::PatKind::Range(.., Spanned { node: RangeEnd::Included(RangeSyntax::DotDotEq), .. }) => {
-                self.ctx.record_lang_feature(sym::dotdoteq_in_patterns, pat.span);
+                self.stab_ctx.record_lang_feature(sym::dotdoteq_in_patterns, pat.span);
             },
             ast::PatKind::Struct(_, fields, _) => {
                 if fields.iter().any(|f| !f.attrs.is_empty()) {
-                    self.ctx.record_lang_feature(sym::struct_field_attributes, pat.span)
+                    self.stab_ctx.record_lang_feature(sym::struct_field_attributes, pat.span)
                 }
                 if fields.iter().any(|f| starts_with_digit(&f.ident.name.as_str())) {
-                    self.ctx.record_lang_feature(sym::relaxed_adts, pat.span);
+                    self.stab_ctx.record_lang_feature(sym::relaxed_adts, pat.span);
                 }
             },
             ast::PatKind::Tuple(ps) if has_rest(ps) => {
-                self.ctx.record_lang_feature(sym::dotdot_in_tuple_patterns, pat.span);
+                self.stab_ctx.record_lang_feature(sym::dotdot_in_tuple_patterns, pat.span);
             },
             ast::PatKind::TupleStruct(_, ps) => {
                 if ps.is_empty() {
-                    self.ctx.record_lang_feature(sym::relaxed_adts, pat.span);
+                    self.stab_ctx.record_lang_feature(sym::relaxed_adts, pat.span);
                 } else if ps.len() > 1 && has_rest(ps) {
-                    self.ctx.record_lang_feature(sym::dotdot_in_tuple_patterns, pat.span);
+                    self.stab_ctx.record_lang_feature(sym::dotdot_in_tuple_patterns, pat.span);
                 }
             },
             ast::PatKind::Paren(..) => {
-                self.ctx.record_lang_feature(sym::pattern_parentheses, pat.span);
+                self.stab_ctx.record_lang_feature(sym::pattern_parentheses, pat.span);
             },
             _ => {},
         }
@@ -305,7 +309,7 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
 
     fn visit_path_segment(&mut self, span: Span, segment: &ast::PathSegment) {
         if segment.ident.name == kw::Crate {
-            self.ctx.record_lang_feature(sym::crate_in_paths, segment.ident.span);
+            self.stab_ctx.record_lang_feature(sym::crate_in_paths, segment.ident.span);
         }
 
         visit::walk_path_segment(self, span, segment);
@@ -313,14 +317,14 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
 }
 
 pub fn process_crate(wrapper: &mut Wrapper, session: &Session, krate: &ast::Crate, resolver: &mut Resolver) {
-    let mut ctx = Context::default();
-    let mut visitor = Visitor::new(&mut ctx, resolver, session.source_map());
+    let mut stab_ctx = StabilityContext::new(session);
+    let mut visitor = Visitor::new(&mut stab_ctx, resolver, session.source_map());
     visit::walk_crate(&mut visitor, &krate);
 
     let raw_ident_spans = session.parse_sess.raw_identifier_spans.borrow();
     for span in raw_ident_spans.iter() {
-        ctx.record_lang_feature(sym::raw_identifiers, *span);
+        stab_ctx.record_lang_feature(sym::raw_identifiers, *span);
     }
 
-    ctx.dump(wrapper, session);
+    stab_ctx.dump(wrapper);
 }

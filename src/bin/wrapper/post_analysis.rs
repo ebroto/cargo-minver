@@ -13,19 +13,23 @@ use rustc_span::Span;
 
 use std::mem;
 
-use super::{context::Context, Wrapper};
+use super::{context::StabilityContext, Wrapper};
 
-struct Visitor<'a, 'tcx> {
-    ctx: &'a mut Context,
+struct Visitor<'a, 'scx, 'tcx> {
+    stab_ctx: &'a mut StabilityContext<'scx>,
     tcx: TyCtxt<'tcx>,
     tables: &'a TypeckTables<'tcx>,
     empty_tables: &'a TypeckTables<'tcx>,
     visiting_adt_def: bool,
 }
 
-impl<'a, 'tcx> Visitor<'a, 'tcx> {
-    pub fn new(ctx: &'a mut Context, tcx: TyCtxt<'tcx>, empty_tables: &'a TypeckTables<'tcx>) -> Self {
-        Visitor { ctx, tcx, tables: empty_tables, empty_tables, visiting_adt_def: false }
+impl<'a, 'scx, 'tcx> Visitor<'a, 'scx, 'tcx> {
+    pub fn new(
+        stab_ctx: &'a mut StabilityContext<'scx>,
+        tcx: TyCtxt<'tcx>,
+        empty_tables: &'a TypeckTables<'tcx>,
+    ) -> Self {
+        Visitor { stab_ctx, tcx, tables: empty_tables, empty_tables, visiting_adt_def: false }
     }
 
     fn process_stability(&mut self, def_id: DefId, span: Span) {
@@ -34,7 +38,7 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
         }
 
         if let Some(stab @ Stability { level: Stable { .. }, .. }) = self.tcx.lookup_stability(def_id) {
-            self.ctx.record_lib_feature(*stab, span.source_callsite());
+            self.stab_ctx.record_lib_feature(*stab, span.source_callsite());
         }
     }
 
@@ -42,10 +46,10 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
         if let ty::Adt(def, _) = ty_kind {
             let variant = def.variant_of_res(res);
             if variant.fields.is_empty() {
-                self.ctx.record_lang_feature(sym::braced_empty_structs, span);
+                self.stab_ctx.record_lang_feature(sym::braced_empty_structs, span);
             }
             if let CtorKind::Fn = variant.ctor_kind {
-                self.ctx.record_lang_feature(sym::relaxed_adts, span);
+                self.stab_ctx.record_lang_feature(sym::relaxed_adts, span);
             }
         }
     }
@@ -71,10 +75,10 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
     fn process_res(&mut self, res: Res, span: Span) {
         match res {
             Res::PrimTy(hir::PrimTy::Int(ast::IntTy::I128) | hir::PrimTy::Uint(ast::UintTy::U128)) => {
-                self.ctx.record_lang_feature(sym::i128_type, span);
+                self.stab_ctx.record_lang_feature(sym::i128_type, span);
             },
             Res::SelfTy(..) if self.visiting_adt_def => {
-                self.ctx.record_lang_feature(sym::self_in_typedefs, span);
+                self.stab_ctx.record_lang_feature(sym::self_in_typedefs, span);
             },
             _ => {},
         }
@@ -90,7 +94,7 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
             if let hir::QPath::TypeRelative(ty, _) = qpath {
                 if let hir::TyKind::Path(hir::QPath::Resolved(None, ref path)) = ty.kind {
                     if let Res::Def(DefKind::TyAlias, _) | Res::SelfTy(..) = path.res {
-                        self.ctx.record_lang_feature(sym::type_alias_enum_variants, span);
+                        self.stab_ctx.record_lang_feature(sym::type_alias_enum_variants, span);
                     }
                 }
             }
@@ -111,7 +115,7 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> {
     }
 }
 
-impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, 'tcx> {
+impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, '_, 'tcx> {
     type Map = Map<'tcx>;
 
     fn nested_visit_map(&mut self) -> NestedVisitorMap<Self::Map> {
@@ -180,7 +184,7 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, 'tcx> {
 
                 let res = self.tables.qpath_res(qpath, pat.hir_id);
                 if let Res::Def(DefKind::AssocTy, _) | Res::SelfTy(..) = res {
-                    self.ctx.record_lang_feature(sym::more_struct_aliases, pat.span);
+                    self.stab_ctx.record_lang_feature(sym::more_struct_aliases, pat.span);
                 }
 
                 if let Some(pat_ty) = self.tables.pat_ty_opt(pat) {
@@ -231,7 +235,7 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, 'tcx> {
 
                 let res = self.tables.qpath_res(qpath, expr.hir_id);
                 if let Res::Def(DefKind::AssocTy, _) | Res::SelfTy(..) = res {
-                    self.ctx.record_lang_feature(sym::more_struct_aliases, expr.span);
+                    self.stab_ctx.record_lang_feature(sym::more_struct_aliases, expr.span);
                 }
 
                 if let Some(expr_ty) = self.tables.expr_ty_adjusted_opt(expr) {
@@ -261,7 +265,7 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, 'tcx> {
         match qpath {
             hir::QPath::Resolved(..) => {
                 if let hir::def::Res::SelfCtor(_) = res {
-                    self.ctx.record_lang_feature(sym::self_struct_ctor, span);
+                    self.stab_ctx.record_lang_feature(sym::self_struct_ctor, span);
                 }
                 // NOTE: Lib stability will be checked when visiting its inner path
             },
@@ -274,7 +278,7 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, 'tcx> {
     }
 }
 
-fn check_termination_trait(ctx: &mut Context, tcx: TyCtxt) {
+fn check_termination_trait(stab_ctx: &mut StabilityContext, tcx: TyCtxt) {
     if let Some((main_did, EntryFnType::Main)) = tcx.entry_fn(LOCAL_CRATE) {
         let hir_id = tcx.hir().as_local_hir_id(main_did).unwrap();
         if let Some(fn_sig) = tcx.hir().fn_sig_by_hir_id(hir_id) {
@@ -283,7 +287,7 @@ fn check_termination_trait(ctx: &mut Context, tcx: TyCtxt) {
                 hir::FnRetTy::DefaultReturn(_) => {},
                 hir::FnRetTy::Return(hir::Ty { kind: hir::TyKind::Tup(elems), .. }) if elems.is_empty() => {},
                 _ => {
-                    ctx.record_lang_feature(sym::termination_trait, output.span());
+                    stab_ctx.record_lang_feature(sym::termination_trait, output.span());
                 },
             }
         }
@@ -293,12 +297,12 @@ fn check_termination_trait(ctx: &mut Context, tcx: TyCtxt) {
 pub fn process_crate(wrapper: &mut Wrapper, tcx: TyCtxt) {
     use intravisit::Visitor as _;
 
-    let mut ctx = Context::default();
-    check_termination_trait(&mut ctx, tcx);
+    let mut stab_ctx = StabilityContext::new(tcx.sess);
+    check_termination_trait(&mut stab_ctx, tcx);
 
     let empty_tables = TypeckTables::empty(None);
-    let mut visitor = Visitor::new(&mut ctx, tcx, &empty_tables);
+    let mut visitor = Visitor::new(&mut stab_ctx, tcx, &empty_tables);
     tcx.hir().krate().visit_all_item_likes(&mut visitor.as_deep_visitor());
 
-    ctx.dump(wrapper, tcx.sess);
+    stab_ctx.dump(wrapper);
 }

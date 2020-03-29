@@ -9,13 +9,17 @@ use cargo_minver::FeatureKind;
 
 use super::Wrapper;
 
-#[derive(Debug, Default)]
-pub struct Context {
+pub struct StabilityContext<'a> {
+    session: &'a Session,
     lang_features: HashMap<Symbol, HashSet<Span>>,
     lib_features: HashMap<Stability, HashSet<Span>>,
 }
 
-impl Context {
+impl<'a> StabilityContext<'a> {
+    pub fn new(session: &'a Session) -> Self {
+        Self { session, lang_features: Default::default(), lib_features: Default::default() }
+    }
+
     pub fn record_lang_feature(&mut self, feature: Symbol, span: Span) {
         self.lang_features.entry(feature).or_default().insert(span);
     }
@@ -24,8 +28,8 @@ impl Context {
         self.lib_features.entry(stab).or_default().insert(span);
     }
 
-    pub fn dump(self, wrapper: &mut Wrapper, session: &Session) {
-        let source_map = session.source_map();
+    pub fn dump(self, wrapper: &mut Wrapper) {
+        let source_map = self.session.source_map();
 
         for (feat_name, spans) in self.lang_features {
             let feature = convert_feature(ACCEPTED_FEATURES.iter().find(|f| f.name == feat_name).unwrap());
