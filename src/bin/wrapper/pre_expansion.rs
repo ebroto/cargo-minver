@@ -5,7 +5,10 @@ use rustc_span::symbol::{sym, Symbol};
 
 use super::{context::Context, Wrapper};
 
-// NOTE: Active attributes are removed after expansion so we need to catch them here.
+// NOTE: This visitor is intended to be used only to catch active attributes before they are removed,
+// but the approach is not valid as it won't catch attributes generated as a result of macro expansion.
+// Another solution is needed.
+
 struct Visitor<'a> {
     ctx: &'a mut Context,
     parse_sess: &'a ParseSess,
