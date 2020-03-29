@@ -179,8 +179,8 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
                     self.stab_ctx.record_lang_feature(sym::fn_must_use, item.span);
                 }
             },
-            ast::ItemKind::Impl { items: impl_items, .. } => {
-                for impl_item in impl_items {
+            ast::ItemKind::Impl { items, .. } => {
+                for impl_item in items {
                     if let ast::AssocItemKind::Fn(..) = impl_item.kind {
                         if impl_item.attrs.iter().any(|a| a.has_name(sym::must_use)) {
                             self.stab_ctx.record_lang_feature(sym::fn_must_use, impl_item.span);
@@ -270,11 +270,16 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
                 }
             },
             ast::ExprKind::Struct(_, fields, _) => {
-                if fields.iter().any(|f| !f.attrs.is_empty()) {
-                    self.stab_ctx.record_lang_feature(sym::struct_field_attributes, expr.span)
-                }
                 if fields.iter().any(|f| starts_with_digit(&f.ident.name.as_str())) {
                     self.stab_ctx.record_lang_feature(sym::relaxed_adts, expr.span);
+                }
+                for field in fields {
+                    if !field.attrs.is_empty() {
+                        self.stab_ctx.record_lang_feature(sym::struct_field_attributes, field.span)
+                    }
+                    if field.is_shorthand {
+                        self.stab_ctx.record_lang_feature(sym::field_init_shorthand, field.span);
+                    }
                 }
             },
             _ => {},
@@ -295,11 +300,13 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
                 self.stab_ctx.record_lang_feature(sym::dotdoteq_in_patterns, pat.span);
             },
             ast::PatKind::Struct(_, fields, _) => {
-                if fields.iter().any(|f| !f.attrs.is_empty()) {
-                    self.stab_ctx.record_lang_feature(sym::struct_field_attributes, pat.span)
-                }
                 if fields.iter().any(|f| starts_with_digit(&f.ident.name.as_str())) {
                     self.stab_ctx.record_lang_feature(sym::relaxed_adts, pat.span);
+                }
+                for field in fields {
+                    if !field.attrs.is_empty() {
+                        self.stab_ctx.record_lang_feature(sym::struct_field_attributes, field.span)
+                    }
                 }
             },
             ast::PatKind::Tuple(ps) if has_rest(ps) => {

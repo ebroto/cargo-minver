@@ -96,8 +96,10 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
 
     fn visit_expr(&mut self, expr: &ast::Expr) {
         if let ast::ExprKind::Struct(_, fields, _) = &expr.kind {
-            if fields.iter().any(|f| !f.attrs.is_empty()) {
-                self.stab_ctx.record_lang_feature(sym::struct_field_attributes, expr.span)
+            for field in fields {
+                if !field.attrs.is_empty() {
+                    self.stab_ctx.record_lang_feature(sym::struct_field_attributes, field.span);
+                }
             }
         }
 
@@ -106,8 +108,10 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
 
     fn visit_pat(&mut self, pat: &ast::Pat) {
         if let ast::PatKind::Struct(_, fields, _) = &pat.kind {
-            if fields.iter().any(|f| !f.attrs.is_empty()) {
-                self.stab_ctx.record_lang_feature(sym::struct_field_attributes, pat.span)
+            for field in fields {
+                if !field.attrs.is_empty() {
+                    self.stab_ctx.record_lang_feature(sym::struct_field_attributes, field.span);
+                }
             }
         }
 
