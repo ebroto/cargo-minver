@@ -174,6 +174,20 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
                 // NOTE: Athough declared as a lang feature, the global_allocator attribute
                 // macro is defined in libcore and will be detected as a library feature.
             },
+            ast::ItemKind::Fn(..) => {
+                if item.attrs.iter().any(|a| a.has_name(sym::must_use)) {
+                    self.stab_ctx.record_lang_feature(sym::fn_must_use, item.span);
+                }
+            },
+            ast::ItemKind::Impl { items: impl_items, .. } => {
+                for impl_item in impl_items {
+                    if let ast::AssocItemKind::Fn(..) = impl_item.kind {
+                        if impl_item.attrs.iter().any(|a| a.has_name(sym::must_use)) {
+                            self.stab_ctx.record_lang_feature(sym::fn_must_use, impl_item.span);
+                        }
+                    }
+                }
+            },
             _ => {},
         }
 

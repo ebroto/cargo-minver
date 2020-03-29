@@ -195,6 +195,15 @@ test_lang_features!(
         ["5:11 5:16"]
     ),
     (
+        fn_must_use,
+        Edition::Edition2015,
+        "1.27.0",
+        [
+            "2:0 4:1", //
+            "13:4 15:5"
+        ]
+    ),
+    (
         repr_transparent,
         Edition::Edition2015,
         "1.28.0",
