@@ -75,6 +75,18 @@ test_lang_features!(
         ["1:0 1:33"]
     ),
     (
+        pub_restricted, //
+        Edition::Edition2015,
+        "1.18.0",
+        [
+            "3:0 3:10", //
+            "5:0 5:9",
+            "8:4 8:13",
+            "11:4 11:13",
+            "14:4 14:13"
+        ]
+    ),
+    (
         loop_break_value, //
         Edition::Edition2015,
         "1.19.0",

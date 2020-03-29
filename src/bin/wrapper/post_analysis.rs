@@ -276,6 +276,14 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, '_, 'tcx> {
 
         intravisit::walk_qpath(self, qpath, id, span);
     }
+
+    fn visit_vis(&mut self, vis: &'tcx hir::Visibility<'tcx>) {
+        if vis.node.is_pub_restricted() {
+            self.stab_ctx.record_lang_feature(sym::pub_restricted, vis.span);
+        }
+
+        intravisit::walk_vis(self, vis);
+    }
 }
 
 fn check_termination_trait(stab_ctx: &mut StabilityContext, tcx: TyCtxt) {
