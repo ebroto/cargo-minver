@@ -117,11 +117,20 @@ fn starts_with_digit(s: &str) -> bool {
 }
 
 impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
-    fn visit_use_tree(&mut self, use_tree: &ast::UseTree, node_id: ast::NodeId, _nested: bool) {
-        if let ast::UseTreeKind::Simple(Some(ident), ..) = use_tree.kind {
-            if ident.name == kw::Underscore {
-                self.stab_ctx.record_lang_feature(sym::underscore_imports, ident.span);
+    fn visit_use_tree(&mut self, use_tree: &ast::UseTree, node_id: ast::NodeId, nested: bool) {
+        if nested {
+            let record = match use_tree.kind {
+                ast::UseTreeKind::Simple(..) if use_tree.prefix.segments.len() != 1 => true,
+                ast::UseTreeKind::Nested(..) | ast::UseTreeKind::Glob => true,
+                _ => false,
+            };
+            if record {
+                self.stab_ctx.record_lang_feature(sym::use_nested_groups, use_tree.span);
             }
+        }
+
+        if let ast::UseTreeKind::Simple(Some(ast::Ident { name: kw::Underscore, span }), ..) = use_tree.kind {
+            self.stab_ctx.record_lang_feature(sym::underscore_imports, span);
         }
 
         visit::walk_use_tree(self, use_tree, node_id);

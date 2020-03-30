@@ -75,7 +75,7 @@ test_lang_features!(
         ["1:0 1:33"]
     ),
     (
-        pub_restricted, //
+        pub_restricted,
         Edition::Edition2015,
         "1.18.0",
         [
@@ -132,6 +132,16 @@ test_lang_features!(
         [
             "4:0 6:1", //
             "9:0 12:1"
+        ]
+    ),
+    (
+        use_nested_groups,
+        Edition::Edition2015,
+        "1.25.0",
+        [
+            "4:22 4:23", //
+            "5:16 5:32",
+            "6:16 6:47"
         ]
     ),
     (
