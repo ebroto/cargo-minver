@@ -69,6 +69,15 @@ test_lang_features!(
         ]
     ),
     (
+        static_in_const,
+        Edition::Edition2015,
+        "1.17.0",
+        [
+            "3:12 3:16", //
+            "6:11 6:15"
+        ]
+    ),
+    (
         windows_subsystem, //
         Edition::Edition2015,
         "1.18.0",

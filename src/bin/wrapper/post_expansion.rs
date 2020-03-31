@@ -82,6 +82,12 @@ impl<'a, 'scx, 'res> Visitor<'a, 'scx, 'res> {
         }
     }
 
+    fn check_static_in_const(&mut self, ty: &ast::Ty) {
+        if let ast::TyKind::Rptr(None, ..) = ty.kind {
+            self.stab_ctx.record_lang_feature(sym::static_in_const, ty.span);
+        }
+    }
+
     fn check_macro_use(&mut self, span: Span) {
         if !span.from_expansion() {
             return;
@@ -176,12 +182,16 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
             ast::ItemKind::Union(..) => {
                 self.check_repr(item);
             },
-            ast::ItemKind::Static(..) => {
+            ast::ItemKind::Static(ty, ..) => {
                 if item.attrs.iter().any(|a| a.has_name(sym::used)) {
                     self.stab_ctx.record_lang_feature(sym::used, item.span);
                 }
+                self.check_static_in_const(ty);
                 // NOTE: Athough declared as a lang feature, the global_allocator attribute
                 // macro is defined in libcore and will be detected as a library feature.
+            },
+            ast::ItemKind::Const(_, ty, ..) => {
+                self.check_static_in_const(ty);
             },
             ast::ItemKind::Fn(..) => {
                 if item.attrs.iter().any(|a| a.has_name(sym::must_use)) {
