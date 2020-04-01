@@ -13,6 +13,12 @@ test_lang_features!(
         ["1:0 1:10"]
     ),
     (
+        augmented_assignments, //
+        Edition::Edition2015,
+        "1.8.0",
+        ["11:4 11:11"]
+    ),
+    (
         braced_empty_structs,
         Edition::Edition2015,
         "1.8.0",

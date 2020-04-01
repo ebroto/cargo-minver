@@ -248,6 +248,16 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, '_, 'tcx> {
             hir::ExprKind::Path(ref qpath) => {
                 self.check_alias_enum_variants(qpath, expr.hir_id, expr.span);
             },
+            hir::ExprKind::AssignOp(_, lhs, rhs) => {
+                let lhs_ty = self.tables.expr_ty_adjusted_opt(lhs);
+                let rhs_ty = self.tables.expr_ty_adjusted_opt(rhs);
+
+                if let (Some(lhs_ty), Some(rhs_ty)) = (lhs_ty, rhs_ty) {
+                    if !lhs_ty.is_scalar() || !rhs_ty.is_scalar() {
+                        self.stab_ctx.record_lang_feature(sym::augmented_assignments, expr.span);
+                    }
+                }
+            },
             _ => {},
         }
 
