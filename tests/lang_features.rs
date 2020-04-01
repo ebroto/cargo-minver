@@ -135,6 +135,15 @@ test_lang_features!(
         ]
     ),
     (
+        abi_sysv64,
+        Edition::Edition2015,
+        "1.24.0",
+        [
+            "3:7 3:15", //
+            "5:7 5:15"
+        ]
+    ),
+    (
         repr_align,
         Edition::Edition2015,
         "1.25.0",

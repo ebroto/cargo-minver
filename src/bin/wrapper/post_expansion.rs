@@ -88,6 +88,12 @@ impl<'a, 'scx, 'res> Visitor<'a, 'scx, 'res> {
         }
     }
 
+    fn check_abi_sysv64(&mut self, abi: &ast::StrLit) {
+        if abi.symbol_unescaped.as_str() == "sysv64" {
+            self.stab_ctx.record_lang_feature(sym::abi_sysv64, abi.span);
+        }
+    }
+
     fn check_macro_use(&mut self, span: Span) {
         if !span.from_expansion() {
             return;
@@ -170,6 +176,11 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
                     self.stab_ctx.record_lang_feature(sym::underscore_imports, item.ident.span);
                 }
             },
+            ast::ItemKind::ForeignMod(foreign_mod) => {
+                if let Some(abi) = foreign_mod.abi {
+                    self.check_abi_sysv64(&abi);
+                }
+            },
             ast::ItemKind::Struct(variant_data, _) => {
                 self.check_non_exhaustive(item);
                 self.check_repr(item);
@@ -222,6 +233,9 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
         if let Some(header) = fn_kind.header() {
             if header.asyncness.is_async() {
                 self.stab_ctx.record_lang_feature(sym::async_await, span);
+            }
+            if let ast::Extern::Explicit(abi) = header.ext {
+                self.check_abi_sysv64(&abi);
             }
         }
 
