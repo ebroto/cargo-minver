@@ -211,9 +211,12 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
             },
             ast::ItemKind::Impl { items, .. } => {
                 for impl_item in items {
-                    if let ast::AssocItemKind::Fn(..) = impl_item.kind {
+                    if let ast::AssocItemKind::Fn(_, fn_sig, ..) = &impl_item.kind {
                         if impl_item.attrs.iter().any(|a| a.has_name(sym::must_use)) {
                             self.stab_ctx.record_lang_feature(sym::fn_must_use, impl_item.span);
+                        }
+                        if let ast::Const::Yes(span) = fn_sig.header.constness {
+                            self.stab_ctx.record_lang_feature(sym::min_const_fn, span);
                         }
                     }
                 }
@@ -233,6 +236,9 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
         if let Some(header) = fn_kind.header() {
             if header.asyncness.is_async() {
                 self.stab_ctx.record_lang_feature(sym::async_await, span);
+            }
+            if let ast::Const::Yes(span) = header.constness {
+                self.stab_ctx.record_lang_feature(sym::min_const_fn, span);
             }
             if let ast::Extern::Explicit(abi) = header.ext {
                 self.check_abi_sysv64(&abi);

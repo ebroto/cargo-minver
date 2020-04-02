@@ -308,10 +308,19 @@ test_lang_features!(
         PanicBehavior::Abort
     ),
     (
-        pattern_parentheses,
-        Edition::Edition2015, //
+        pattern_parentheses, //
+        Edition::Edition2015,
         "1.31.0",
         ["5:8 5:12"]
+    ),
+    (
+        min_const_fn,
+        Edition::Edition2015,
+        "1.31.0",
+        [
+            "3:0 3:5", //
+            "7:4 7:9"
+        ]
     ),
     (
         self_struct_ctor,
