@@ -264,6 +264,14 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
         visit::walk_generic_param(self, param);
     }
 
+    fn visit_lifetime(&mut self, lifetime: &ast::Lifetime) {
+        if lifetime.ident.name == kw::UnderscoreLifetime {
+            self.stab_ctx.record_lang_feature(sym::underscore_lifetimes, lifetime.ident.span);
+        }
+
+        visit::walk_lifetime(self, lifetime);
+    }
+
     fn visit_ty(&mut self, ty: &ast::Ty) {
         self.check_macro_use(ty.span);
 

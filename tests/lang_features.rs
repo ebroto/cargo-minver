@@ -202,6 +202,16 @@ test_lang_features!(
         ["3:13 3:30"]
     ),
     (
+        underscore_lifetimes,
+        Edition::Edition2015,
+        "1.26.0",
+        [
+            "11:7 11:9", //
+            "15:13 15:15",
+            "19:33 19:35"
+        ]
+    ),
+    (
         cfg_target_feature,
         Edition::Edition2015,
         "1.27.0",
