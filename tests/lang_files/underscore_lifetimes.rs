@@ -1,23 +1,29 @@
 #![allow(unused)]
 
+use std::fmt::Debug;
+
+#[derive(Debug)]
 struct S<'a> {
     value: &'a i32,
 }
 
-trait T {
-    fn foo(&self) {}
-}
+fn foo(s: S<'_>) {}
 
-impl S<'_> {
-    fn frob() {}
+struct A {
+    value: i32,
 }
+impl A {
+    fn foo(&self) -> S<'_> {
+        S { value: &self.value }
+    }
 
-impl T for S<'_> {
-    fn foo(&self) {}
-}
+    fn bar(&self) -> Box<dyn Debug + '_> {
+        Box::new(S { value: &self.value })
+    }
 
-fn mk_s<'a>(value: &'a i32) -> S<'_> {
-    S { value }
+    fn baz(&self) -> Box<impl Debug + '_> {
+        Box::new(S { value: &self.value })
+    }
 }
 
 fn main() {}
