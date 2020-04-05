@@ -137,18 +137,26 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, '_, 'tcx> {
                 let def_id = DefId { krate: cnum, index: CRATE_DEF_INDEX };
                 self.process_stability(def_id, item.span);
             },
-            hir::ItemKind::Impl { of_trait: Some(ref t), items, .. } => {
-                if let Res::Def(DefKind::Trait, trait_did) = t.path.res {
-                    for impl_item_ref in items {
-                        let impl_item = self.tcx.hir().impl_item(impl_item_ref.id);
-                        let trait_item_def_id = self
-                            .tcx
-                            .associated_items(trait_did)
-                            .filter_by_name_unhygienic(impl_item.ident.name)
-                            .next()
-                            .map(|item| item.def_id);
-                        if let Some(def_id) = trait_item_def_id {
-                            self.process_stability(def_id, impl_item.span);
+            hir::ItemKind::Impl { ref of_trait, items, ref generics, .. } => {
+                for param in generics.params {
+                    if let hir::GenericParamKind::Lifetime { kind: hir::LifetimeParamKind::Elided } = param.kind {
+                        self.stab_ctx.record_lang_feature(sym::impl_header_lifetime_elision, param.span);
+                    }
+                }
+
+                if let Some(t) = of_trait {
+                    if let Res::Def(DefKind::Trait, trait_did) = t.path.res {
+                        for impl_item_ref in items {
+                            let impl_item = self.tcx.hir().impl_item(impl_item_ref.id);
+                            let trait_item_def_id = self
+                                .tcx
+                                .associated_items(trait_did)
+                                .filter_by_name_unhygienic(impl_item.ident.name)
+                                .next()
+                                .map(|item| item.def_id);
+                            if let Some(def_id) = trait_item_def_id {
+                                self.process_stability(def_id, impl_item.span);
+                            }
                         }
                     }
                 }

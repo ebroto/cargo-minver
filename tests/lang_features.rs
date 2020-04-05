@@ -334,6 +334,17 @@ test_lang_features!(
         ]
     ),
     (
+        impl_header_lifetime_elision,
+        Edition::Edition2015,
+        "1.31.0",
+        [
+            "6:7 6:9", //
+            "9:13 9:15",
+            "10:12 10:13",
+            "10:18 10:19"
+        ]
+    ),
+    (
         self_struct_ctor,
         Edition::Edition2015,
         "1.32.0",
