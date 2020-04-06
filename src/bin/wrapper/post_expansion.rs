@@ -350,6 +350,9 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
                     }
                 }
             },
+            ast::ExprKind::Try(..) => {
+                self.stab_ctx.record_lang_feature(sym::question_mark, expr.span);
+            },
             _ => {},
         }
 

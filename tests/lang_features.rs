@@ -41,6 +41,12 @@ test_lang_features!(
         ["3:0 3:13"]
     ),
     (
+        question_mark, //
+        Edition::Edition2015,
+        "1.13.0",
+        ["8:14 8:20"]
+    ),
+    (
         dotdot_in_tuple_patterns,
         Edition::Edition2015,
         "1.14.0",
