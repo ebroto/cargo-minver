@@ -177,9 +177,12 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
         self.check_macro_use(item.span);
 
         match &item.kind {
-            ast::ItemKind::ExternCrate(_) => {
+            ast::ItemKind::ExternCrate(original) => {
                 if item.ident.name == kw::Underscore {
                     self.stab_ctx.record_lang_feature(sym::underscore_imports, item.ident.span);
+                }
+                if let Some(kw::SelfLower) = original {
+                    self.stab_ctx.record_lang_feature(sym::extern_crate_self, item.span);
                 }
             },
             ast::ItemKind::ForeignMod(foreign_mod) => {

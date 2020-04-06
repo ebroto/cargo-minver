@@ -430,6 +430,12 @@ test_lang_features!(
         ]
     ),
     (
+        extern_crate_self, //
+        Edition::Edition2015,
+        "1.34.0",
+        ["1:0 1:25"]
+    ),
+    (
         type_alias_enum_variants, //
         Edition::Edition2015,
         "1.37.0",
