@@ -213,6 +213,15 @@ test_lang_features!(
         ]
     ),
     (
+        const_indexing,
+        Edition::Edition2015,
+        "1.26.0",
+        [
+            "2:20 2:30", //
+            "5:17 5:27"
+        ]
+    ),
+    (
         cfg_target_feature,
         Edition::Edition2015,
         "1.27.0",

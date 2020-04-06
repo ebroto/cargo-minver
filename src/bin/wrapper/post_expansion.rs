@@ -94,6 +94,12 @@ impl<'a, 'scx, 'res> Visitor<'a, 'scx, 'res> {
         }
     }
 
+    fn check_const_indexing(&mut self, size_expr: &ast::Expr) {
+        if let ast::ExprKind::Index(..) = size_expr.kind {
+            self.stab_ctx.record_lang_feature(sym::const_indexing, size_expr.span);
+        }
+    }
+
     fn check_macro_use(&mut self, span: Span) {
         if !span.from_expansion() {
             return;
@@ -275,8 +281,14 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
     fn visit_ty(&mut self, ty: &ast::Ty) {
         self.check_macro_use(ty.span);
 
-        if let ast::TyKind::TraitObject(_, ast::TraitObjectSyntax::Dyn) = ty.kind {
-            self.stab_ctx.record_lang_feature(sym::dyn_trait, ty.span);
+        match &ty.kind {
+            ast::TyKind::TraitObject(_, ast::TraitObjectSyntax::Dyn) => {
+                self.stab_ctx.record_lang_feature(sym::dyn_trait, ty.span);
+            },
+            ast::TyKind::Array(_, size) => {
+                self.check_const_indexing(&size.value);
+            },
+            _ => {},
         }
 
         visit::walk_ty(self, ty);
@@ -298,6 +310,9 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
         match &expr.kind {
             ast::ExprKind::Range(_, _, ast::RangeLimits::Closed) => {
                 self.stab_ctx.record_lang_feature(sym::inclusive_range_syntax, expr.span);
+            },
+            ast::ExprKind::Repeat(_, size) => {
+                self.check_const_indexing(&size.value);
             },
             ast::ExprKind::Break(_, Some(_)) => {
                 self.stab_ctx.record_lang_feature(sym::loop_break_value, expr.span);
