@@ -211,6 +211,9 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
                 // macro is defined in libcore and will be detected as a library feature.
             },
             ast::ItemKind::Const(_, ty, ..) => {
+                if item.ident.name == kw::Underscore {
+                    self.stab_ctx.record_lang_feature(sym::underscore_const_names, item.ident.span);
+                }
                 self.check_static_in_const(ty);
             },
             ast::ItemKind::Fn(..) => {

@@ -461,6 +461,12 @@ test_lang_features!(
         ["4:0 6:1"]
     ),
     (
+        underscore_const_names, //
+        Edition::Edition2015,
+        "1.37.0",
+        ["1:6 1:7"]
+    ),
+    (
         async_await,
         Edition::Edition2018,
         "1.39.0",
