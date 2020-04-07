@@ -266,6 +266,14 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, '_, 'tcx> {
                     }
                 }
             },
+            hir::ExprKind::Match(_, arms, source) => {
+                if let hir::MatchSource::IfLetDesugar { .. } | hir::MatchSource::WhileLetDesugar = source {
+                    let pat = &arms[0].pat;
+                    if !pat.is_refutable() {
+                        self.stab_ctx.record_lang_feature(sym::irrefutable_let_patterns, pat.span);
+                    }
+                }
+            },
             _ => {},
         }
 

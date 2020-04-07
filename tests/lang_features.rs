@@ -400,6 +400,15 @@ test_lang_features!(
         ]
     ),
     (
+        irrefutable_let_patterns,
+        Edition::Edition2015,
+        "1.33.0",
+        [
+            "4:11 4:12", //
+            "5:14 5:15",
+        ]
+    ),
+    (
         underscore_imports,
         Edition::Edition2015,
         "1.33.0",
