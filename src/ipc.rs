@@ -20,9 +20,10 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(port: u16) -> Result<Self> {
-        let address = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+    pub fn new() -> Result<Self> {
+        let address = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
         let listener = TcpListener::bind(address).context("could not bind to local address")?;
+        let port = listener.local_addr().context("could not retrieve local port")?.port();
         let join_handle = thread::Builder::new() //
             .name("server".into())
             .spawn(|| Server::serve(listener))
@@ -46,6 +47,10 @@ impl Server {
             }
         }
         Ok(data.into())
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
     }
 
     pub fn into_analysis(self) -> Result<Analysis> {

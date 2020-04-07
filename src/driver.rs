@@ -14,9 +14,6 @@ const WRAPPER_NAME: &str = "minver-wrapper";
 
 #[derive(Debug, Default, StructOpt)]
 pub struct Options {
-    /// The port used by the local server.
-    #[structopt(short = "p", long, default_value = "64221")]
-    server_port: u16,
     /// Path to the compiler wrapper.
     #[structopt(long)]
     wrapper_path: Option<PathBuf>,
@@ -46,7 +43,7 @@ pub struct Options {
     benches: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Driver {
     opts: Options,
 }
@@ -57,20 +54,9 @@ impl From<Options> for Driver {
     }
 }
 
-impl Default for Driver {
-    fn default() -> Self {
-        Self { opts: Options { server_port: 64221, ..Default::default() } }
-    }
-}
-
 impl Driver {
     pub fn new() -> Self {
         Default::default()
-    }
-
-    pub fn server_port(&mut self, port: u16) -> &mut Self {
-        self.opts.server_port = port;
-        self
     }
 
     pub fn wrapper_path<P: Into<PathBuf>>(&mut self, path: P) -> &mut Self {
@@ -120,12 +106,12 @@ impl Driver {
 
     pub fn execute(&mut self) -> Result<Analysis> {
         // Start a server that will receive the results of the analysis of each crate.
-        let server = Server::new(self.opts.server_port).context("could not start server")?;
+        let server = Server::new().context("could not start server")?;
 
         // Build the crate and its dependencies. Run cargo clean before to make sure we see all the code.
         // TODO: Store stability information to avoid unnecessary rebuilds.
         self.cargo_clean().context("failed to execute cargo clean")?;
-        self.cargo_check().context("failed to execute cargo check")?;
+        self.cargo_check(server.port()).context("failed to execute cargo check")?;
 
         // Process the results of the analysis.
         let analysis = server.into_analysis().context("failed to retrieve analysis result")?;
@@ -150,7 +136,7 @@ impl Driver {
         Ok(())
     }
 
-    fn cargo_check(&self) -> Result<()> {
+    fn cargo_check(&self, server_port: u16) -> Result<()> {
         fn path_to_wrapper(wrapper_path: Option<PathBuf>) -> Result<PathBuf> {
             let path = match wrapper_path {
                 Some(path) => path,
@@ -174,7 +160,7 @@ impl Driver {
         let mut command = Command::new("cargo");
         let mut builder = command
             .env(WRAPPER_ENV, wrapper_path)
-            .env(SERVER_PORT_ENV, self.opts.server_port.to_string())
+            .env(SERVER_PORT_ENV, server_port.to_string())
             .arg(toolchain)
             .arg("check");
 

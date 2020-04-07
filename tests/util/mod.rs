@@ -30,15 +30,15 @@ pub fn wrapper_path() -> Result<PathBuf> {
 }
 
 macro_rules! test_lang_feature {
-    ($port: expr, ($name: ident, $edition: expr, $version: expr, $spans: expr)) => {
-        test_lang_feature!($port, ($name, $edition, $version, $spans, PanicBehavior::Unwind));
+    (($name: ident, $edition: expr, $version: expr, $spans: expr)) => {
+        test_lang_feature!(($name, $edition, $version, $spans, PanicBehavior::Unwind));
     };
 
-    ($port: expr, ($name: ident, $edition: expr, $version: expr, $spans: expr, $on_panic: expr)) => {
-        test_lang_feature!($port, ($name, $edition, $version, $spans, $on_panic, false));
+    (($name: ident, $edition: expr, $version: expr, $spans: expr, $on_panic: expr)) => {
+        test_lang_feature!(($name, $edition, $version, $spans, $on_panic, false));
     };
 
-    ($port: expr, ($name: ident, $edition: expr, $version: expr, $spans: expr, $on_panic: expr, $inspect: expr)) => {
+    (($name: ident, $edition: expr, $version: expr, $spans: expr, $on_panic: expr, $inspect: expr)) => {
         #[test]
         fn $name() -> anyhow::Result<()> {
             let name = stringify!($name);
@@ -50,7 +50,6 @@ macro_rules! test_lang_feature {
                 .create()?;
 
             let analysis = cargo_minver::Driver::new()
-                .server_port($port)
                 .wrapper_path(util::wrapper_path()?)
                 .manifest_path(project.manifest_path())
                 .quiet(true)
@@ -75,13 +74,6 @@ macro_rules! test_lang_feature {
 
 macro_rules! test_lang_features {
     ($($feature:tt),*) => {
-        test_lang_features!(@step 42000u16, $($feature,)*);
+        $(test_lang_feature!($feature);)*
     };
-
-    (@step $port:expr, $head:tt, $($tail:tt,)*) => {
-        test_lang_feature!($port, $head);
-        test_lang_features!(@step $port + 1u16, $($tail,)*);
-    };
-
-    (@step $_port: expr,) => {};
 }
