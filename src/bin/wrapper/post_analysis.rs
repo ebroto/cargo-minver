@@ -101,6 +101,25 @@ impl<'a, 'scx, 'tcx> Visitor<'a, 'scx, 'tcx> {
         }
     }
 
+    fn check_min_const_unsafe_fn(&mut self, def_id: DefId, expr: &hir::Expr) {
+        use hir::{Constness, ImplItem, ImplItemKind, Item, ItemKind, Node, Unsafety};
+
+        if let Unsafety::Unsafe = self.tcx.fn_sig(def_id).unsafety() {
+            for (_, node) in self.tcx.hir().parent_iter(expr.hir_id) {
+                match node {
+                    Node::Item(&Item { kind: ItemKind::Fn(ref sig, ..), .. })
+                    | Node::ImplItem(&ImplItem { kind: ImplItemKind::Fn(ref sig, ..), .. }) => {
+                        if sig.header.constness == Constness::Const {
+                            self.stab_ctx.record_lang_feature(sym::min_const_unsafe_fn, expr.span);
+                        }
+                        return;
+                    },
+                    _ => {},
+                }
+            }
+        }
+    }
+
     fn with_item_tables<F>(&mut self, hir_id: hir::HirId, f: F)
     where
         F: FnOnce(&mut Self),
@@ -228,9 +247,17 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, '_, 'tcx> {
 
     fn visit_expr(&mut self, expr: &'tcx hir::Expr<'tcx>) {
         match expr.kind {
+            hir::ExprKind::Call(path, _) => {
+                if let hir::Expr { kind: hir::ExprKind::Path(qpath), .. } = path {
+                    if let Res::Def(_, def_id) = self.tables.qpath_res(qpath, path.hir_id) {
+                        self.check_min_const_unsafe_fn(def_id, expr);
+                    }
+                }
+            },
             hir::ExprKind::MethodCall(..) => {
                 if let Some(def_id) = self.tables.type_dependent_def_id(expr.hir_id) {
                     self.process_stability(def_id, expr.span);
+                    self.check_min_const_unsafe_fn(def_id, expr);
                 }
             },
             hir::ExprKind::Field(subexpr, ident) => {

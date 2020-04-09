@@ -445,6 +445,20 @@ test_lang_features!(
         ]
     ),
     (
+        min_const_unsafe_fn,
+        Edition::Edition2015,
+        "1.33.0",
+        [
+            "15:13 15:18", //
+            "19:28 19:33",
+            "24:4 24:9",
+            "30:17 30:22",
+            "34:8 34:13",
+            "38:17 38:22",
+            "42:8 42:13"
+        ]
+    ),
+    (
         extern_crate_self, //
         Edition::Edition2015,
         "1.34.0",
