@@ -11,21 +11,17 @@ use rustc_span::Span;
 
 use std::collections::HashMap;
 
-use super::{context::StabilityContext, Wrapper};
+use super::{context::StabCtxt, Wrapper};
 
 struct Visitor<'a, 'scx, 'res> {
-    stab_ctx: &'a mut StabilityContext<'scx>,
+    stab_ctx: &'a mut StabCtxt<'scx>,
     resolver: &'a mut Resolver<'res>,
     source_map: &'a SourceMap,
     imported_macros: HashMap<Symbol, Option<Stability>>,
 }
 
 impl<'a, 'scx, 'res> Visitor<'a, 'scx, 'res> {
-    fn new(
-        stab_ctx: &'a mut StabilityContext<'scx>,
-        resolver: &'a mut Resolver<'res>,
-        source_map: &'a SourceMap,
-    ) -> Self {
+    fn new(stab_ctx: &'a mut StabCtxt<'scx>, resolver: &'a mut Resolver<'res>, source_map: &'a SourceMap) -> Self {
         Self { stab_ctx, resolver, source_map, imported_macros: Default::default() }
     }
 
@@ -417,7 +413,7 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
 }
 
 pub fn process_crate(wrapper: &mut Wrapper, session: &Session, krate: &ast::Crate, resolver: &mut Resolver) {
-    let mut stab_ctx = StabilityContext::new(session);
+    let mut stab_ctx = StabCtxt::new(session);
     let mut visitor = Visitor::new(&mut stab_ctx, resolver, session.source_map());
     visit::walk_crate(&mut visitor, &krate);
 

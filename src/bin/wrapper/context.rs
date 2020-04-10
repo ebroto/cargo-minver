@@ -9,13 +9,13 @@ use cargo_minver::FeatureKind;
 
 use super::Wrapper;
 
-pub struct StabilityContext<'a> {
+pub struct StabCtxt<'a> {
     session: &'a Session,
     lang_features: HashMap<Symbol, HashSet<Span>>,
     lib_features: HashMap<Stability, HashSet<Span>>,
 }
 
-impl<'a> StabilityContext<'a> {
+impl<'a> StabCtxt<'a> {
     pub fn new(session: &'a Session) -> Self {
         Self { session, lang_features: Default::default(), lib_features: Default::default() }
     }

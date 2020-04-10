@@ -3,21 +3,21 @@ use rustc_parse::{self, MACRO_ARGUMENTS};
 use rustc_session::{parse::ParseSess, Session};
 use rustc_span::symbol::{sym, Symbol};
 
-use super::{context::StabilityContext, Wrapper};
+use super::{context::StabCtxt, Wrapper};
 
 // NOTE: This visitor is intended to be used only to catch active attributes before they are removed,
 // but the approach is not valid as it won't catch attributes generated as a result of macro expansion.
 // Another solution is needed.
 
 struct Visitor<'a, 'scx> {
-    stab_ctx: &'a mut StabilityContext<'scx>,
+    stab_ctx: &'a mut StabCtxt<'scx>,
     parse_sess: &'a ParseSess,
     // NOTE: sym::target_vendor does not exist
     target_vendor: Symbol,
 }
 
 impl<'a, 'scx> Visitor<'a, 'scx> {
-    fn new(stab_ctx: &'a mut StabilityContext<'scx>, parse_sess: &'a ParseSess) -> Self {
+    fn new(stab_ctx: &'a mut StabCtxt<'scx>, parse_sess: &'a ParseSess) -> Self {
         Self { stab_ctx, parse_sess, target_vendor: Symbol::intern("target_vendor") }
     }
 
@@ -120,7 +120,7 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_> {
 }
 
 pub fn process_crate(wrapper: &mut Wrapper, session: &Session, krate: &ast::Crate) {
-    let mut stab_ctx = StabilityContext::new(session);
+    let mut stab_ctx = StabCtxt::new(session);
     let mut visitor = Visitor::new(&mut stab_ctx, &session.parse_sess);
     visit::walk_crate(&mut visitor, &krate);
 

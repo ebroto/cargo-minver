@@ -13,10 +13,10 @@ use rustc_span::Span;
 
 use std::mem;
 
-use super::{context::StabilityContext, Wrapper};
+use super::{context::StabCtxt, Wrapper};
 
 struct Visitor<'a, 'scx, 'tcx> {
-    stab_ctx: &'a mut StabilityContext<'scx>,
+    stab_ctx: &'a mut StabCtxt<'scx>,
     tcx: TyCtxt<'tcx>,
     tables: &'a TypeckTables<'tcx>,
     empty_tables: &'a TypeckTables<'tcx>,
@@ -24,15 +24,11 @@ struct Visitor<'a, 'scx, 'tcx> {
 }
 
 impl<'a, 'scx, 'tcx> Visitor<'a, 'scx, 'tcx> {
-    pub fn new(
-        stab_ctx: &'a mut StabilityContext<'scx>,
-        tcx: TyCtxt<'tcx>,
-        empty_tables: &'a TypeckTables<'tcx>,
-    ) -> Self {
+    pub fn new(stab_ctx: &'a mut StabCtxt<'scx>, tcx: TyCtxt<'tcx>, empty_tables: &'a TypeckTables<'tcx>) -> Self {
         Visitor { stab_ctx, tcx, tables: empty_tables, empty_tables, visiting_adt_def: false }
     }
 
-    fn process_stability(&mut self, def_id: DefId, span: Span) {
+    fn process_lib_stability(&mut self, def_id: DefId, span: Span) {
         if def_id.is_local() {
             return;
         }
@@ -64,7 +60,7 @@ impl<'a, 'scx, 'tcx> Visitor<'a, 'scx, 'tcx> {
                     if let Some(ty_field) =
                         self.tcx.find_field_index(*ident, variant).map(|index| &variant.fields[index])
                     {
-                        self.process_stability(ty_field.did, *span);
+                        self.process_lib_stability(ty_field.did, *span);
                     }
                 }
             },
@@ -84,7 +80,7 @@ impl<'a, 'scx, 'tcx> Visitor<'a, 'scx, 'tcx> {
         }
 
         if let Some(def_id) = res.opt_def_id() {
-            self.process_stability(def_id, span);
+            self.process_lib_stability(def_id, span);
         }
     }
 
@@ -167,7 +163,7 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, '_, 'tcx> {
                     None => return,
                 };
                 let def_id = DefId { krate: cnum, index: CRATE_DEF_INDEX };
-                self.process_stability(def_id, item.span);
+                self.process_lib_stability(def_id, item.span);
             },
             hir::ItemKind::Impl { ref of_trait, items, ref generics, .. } => {
                 for param in generics.params {
@@ -187,7 +183,7 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, '_, 'tcx> {
                                 .next()
                                 .map(|item| item.def_id);
                             if let Some(def_id) = trait_item_def_id {
-                                self.process_stability(def_id, impl_item.span);
+                                self.process_lib_stability(def_id, impl_item.span);
                             }
                         }
                     }
@@ -242,7 +238,7 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, '_, 'tcx> {
                         ty::Adt(def, _) if !def.is_enum() => {
                             let variant = def.non_enum_variant();
                             for (i, subpat) in subpats.iter().enumerate_and_adjust(variant.fields.len(), *ddpos) {
-                                self.process_stability(variant.fields[i].did, subpat.span);
+                                self.process_lib_stability(variant.fields[i].did, subpat.span);
                             }
                         },
                         _ => {},
@@ -270,7 +266,7 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, '_, 'tcx> {
             },
             hir::ExprKind::MethodCall(..) => {
                 if let Some(def_id) = self.tables.type_dependent_def_id(expr.hir_id) {
-                    self.process_stability(def_id, expr.span);
+                    self.process_lib_stability(def_id, expr.span);
                     self.check_min_const_unsafe_fn(def_id, expr);
                     self.check_const_constructor(def_id, expr);
                 }
@@ -354,7 +350,7 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, '_, 'tcx> {
     }
 }
 
-fn check_termination_trait(stab_ctx: &mut StabilityContext, tcx: TyCtxt) {
+fn check_termination_trait(stab_ctx: &mut StabCtxt, tcx: TyCtxt) {
     if let Some((main_did, EntryFnType::Main)) = tcx.entry_fn(LOCAL_CRATE) {
         let hir_id = tcx.hir().as_local_hir_id(main_did).unwrap();
         if let Some(fn_sig) = tcx.hir().fn_sig_by_hir_id(hir_id) {
@@ -373,7 +369,7 @@ fn check_termination_trait(stab_ctx: &mut StabilityContext, tcx: TyCtxt) {
 pub fn process_crate(wrapper: &mut Wrapper, tcx: TyCtxt) {
     use intravisit::Visitor as _;
 
-    let mut stab_ctx = StabilityContext::new(tcx.sess);
+    let mut stab_ctx = StabCtxt::new(tcx.sess);
     check_termination_trait(&mut stab_ctx, tcx);
 
     let empty_tables = TypeckTables::empty(None);
