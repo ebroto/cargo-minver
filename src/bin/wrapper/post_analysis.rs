@@ -1,5 +1,3 @@
-use rustc::hir::map::Map;
-use rustc::ty::{self, TyCtxt, TypeckTables};
 use rustc_ast::ast;
 use rustc_attr::{Stability, Stable};
 use rustc_hir as hir;
@@ -7,6 +5,8 @@ use rustc_hir::def::{CtorKind, CtorOf, DefKind, Res};
 use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX, LOCAL_CRATE};
 use rustc_hir::intravisit::{self, NestedVisitorMap};
 use rustc_hir::pat_util::EnumerateAndAdjustIterator;
+use rustc_middle::hir::map::Map;
+use rustc_middle::ty::{self, TyCtxt, TypeckTables};
 use rustc_session::config::EntryFnType;
 use rustc_span::symbol::{sym, Ident};
 use rustc_span::Span;
@@ -89,8 +89,9 @@ impl<'a, 'scx, 'tcx> Visitor<'a, 'scx, 'tcx> {
     }
 
     fn check_alias_enum_variants(&mut self, qpath: &hir::QPath, hir_id: hir::HirId, span: Span) {
-        if let Res::Def(DefKind::Variant | DefKind::Ctor(CtorOf::Variant, _), _) = self.tables.qpath_res(qpath, hir_id)
-        {
+        let res = self.tables.qpath_res(qpath, hir_id);
+
+        if let Res::Def(DefKind::Variant | DefKind::Ctor(CtorOf::Variant, _), _) = res {
             if let hir::QPath::TypeRelative(ty, _) = qpath {
                 if let hir::TyKind::Path(hir::QPath::Resolved(None, ref path)) = ty.kind {
                     if let Res::Def(DefKind::TyAlias, _) | Res::SelfTy(..) = path.res {

@@ -1,13 +1,13 @@
 #![feature(rustc_private)]
 #![feature(or_patterns)]
 
-extern crate rustc;
 extern crate rustc_ast;
 extern crate rustc_attr;
 extern crate rustc_driver;
 extern crate rustc_feature;
 extern crate rustc_hir;
 extern crate rustc_interface;
+extern crate rustc_middle;
 extern crate rustc_parse;
 extern crate rustc_resolve;
 extern crate rustc_session;
