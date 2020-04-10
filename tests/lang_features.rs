@@ -552,6 +552,17 @@ test_lang_features!(
         ]
     ),
     (
+        const_constructor,
+        Edition::Edition2015,
+        "1.40.0",
+        [
+            "9:13 9:18", //
+            "10:13 10:21",
+            "13:12 13:17",
+            "14:12 14:20"
+        ]
+    ),
+    (
         transparent_enums,
         Edition::Edition2015,
         "1.42.0",

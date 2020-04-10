@@ -102,21 +102,16 @@ impl<'a, 'scx, 'tcx> Visitor<'a, 'scx, 'tcx> {
     }
 
     fn check_min_const_unsafe_fn(&mut self, def_id: DefId, expr: &hir::Expr) {
-        use hir::{Constness, ImplItem, ImplItemKind, Item, ItemKind, Node, Unsafety};
-
-        if let Unsafety::Unsafe = self.tcx.fn_sig(def_id).unsafety() {
-            for (_, node) in self.tcx.hir().parent_iter(expr.hir_id) {
-                match node {
-                    Node::Item(&Item { kind: ItemKind::Fn(ref sig, ..), .. })
-                    | Node::ImplItem(&ImplItem { kind: ImplItemKind::Fn(ref sig, ..), .. }) => {
-                        if sig.header.constness == Constness::Const {
-                            self.stab_ctx.record_lang_feature(sym::min_const_unsafe_fn, expr.span);
-                        }
-                        return;
-                    },
-                    _ => {},
-                }
+        if let hir::Unsafety::Unsafe = self.tcx.fn_sig(def_id).unsafety() {
+            if self.in_const_fn(expr.hir_id) {
+                self.stab_ctx.record_lang_feature(sym::min_const_unsafe_fn, expr.span);
             }
+        }
+    }
+
+    fn check_const_constructor(&mut self, def_id: DefId, expr: &hir::Expr) {
+        if self.tcx.is_constructor(def_id) && self.tcx.hir().is_const_context(expr.hir_id) {
+            self.stab_ctx.record_lang_feature(sym::const_constructor, expr.span);
         }
     }
 
@@ -131,6 +126,23 @@ impl<'a, 'scx, 'tcx> Visitor<'a, 'scx, 'tcx> {
         let old_tables = mem::replace(&mut self.tables, tables);
         f(self);
         self.tables = old_tables;
+    }
+
+    fn in_const_fn(&self, hir_id: hir::HirId) -> bool {
+        use hir::{Constness, ImplItem, ImplItemKind, Item, ItemKind, Node};
+
+        for (_, node) in self.tcx.hir().parent_iter(hir_id) {
+            match node {
+                Node::Item(&Item { kind: ItemKind::Fn(ref sig, ..), .. })
+                | Node::ImplItem(&ImplItem { kind: ImplItemKind::Fn(ref sig, ..), .. })
+                    if sig.header.constness == Constness::Const =>
+                {
+                    return true;
+                }
+                _ => {},
+            }
+        }
+        false
     }
 }
 
@@ -251,6 +263,7 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, '_, 'tcx> {
                 if let hir::Expr { kind: hir::ExprKind::Path(qpath), .. } = path {
                     if let Res::Def(_, def_id) = self.tables.qpath_res(qpath, path.hir_id) {
                         self.check_min_const_unsafe_fn(def_id, expr);
+                        self.check_const_constructor(def_id, expr);
                     }
                 }
             },
@@ -258,6 +271,7 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, '_, 'tcx> {
                 if let Some(def_id) = self.tables.type_dependent_def_id(expr.hir_id) {
                     self.process_stability(def_id, expr.span);
                     self.check_min_const_unsafe_fn(def_id, expr);
+                    self.check_const_constructor(def_id, expr);
                 }
             },
             hir::ExprKind::Field(subexpr, ident) => {
