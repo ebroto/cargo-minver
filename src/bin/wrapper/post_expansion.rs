@@ -239,6 +239,14 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
         visit::walk_item(self, item);
     }
 
+    fn visit_assoc_item(&mut self, item: &ast::AssocItem, ctxt: visit::AssocCtxt) {
+        if let ast::AssocItemKind::Const(..) = item.kind {
+            self.stab_ctx.record_lang_feature(sym::associated_consts, item.span);
+        }
+
+        visit::walk_assoc_item(self, item, ctxt);
+    }
+
     fn visit_variant(&mut self, variant: &ast::Variant) {
         self.check_variant_data(&variant.data, variant.span);
         visit::walk_variant(self, variant);

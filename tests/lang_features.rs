@@ -147,6 +147,16 @@ test_lang_features!(
         ]
     ),
     (
+        associated_consts,
+        Edition::Edition2015,
+        "1.20.0",
+        [
+            "4:4 4:17", //
+            "9:4 9:22",
+            "13:4 13:22"
+        ]
+    ),
+    (
         abi_sysv64,
         Edition::Edition2015,
         "1.24.0",
