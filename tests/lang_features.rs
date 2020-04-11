@@ -238,6 +238,12 @@ test_lang_features!(
         ]
     ),
     (
+        universal_impl_trait, //
+        Edition::Edition2015,
+        "1.26.0",
+        ["5:7 5:17"]
+    ),
+    (
         cfg_target_feature,
         Edition::Edition2015,
         "1.27.0",

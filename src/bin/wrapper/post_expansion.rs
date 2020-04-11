@@ -268,6 +268,9 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
         if !param.attrs.is_empty() {
             self.stab_ctx.record_lang_feature(sym::param_attrs, param.span);
         }
+        if let ast::TyKind::ImplTrait(..) = param.ty.kind {
+            self.stab_ctx.record_lang_feature(sym::universal_impl_trait, param.span);
+        }
 
         visit::walk_param(self, param);
     }
