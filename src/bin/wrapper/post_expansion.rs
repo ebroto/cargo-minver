@@ -397,6 +397,18 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
             ast::PatKind::Paren(..) => {
                 self.stab_ctx.record_lang_feature(sym::pattern_parentheses, pat.span);
             },
+            ast::PatKind::Slice(pats) => {
+                for pat in &*pats {
+                    let span = pat.span;
+                    let inner_pat = match &pat.kind {
+                        ast::PatKind::Ident(.., Some(pat)) => pat,
+                        _ => pat,
+                    };
+                    if inner_pat.is_rest() {
+                        self.stab_ctx.record_lang_feature(sym::slice_patterns, span);
+                    }
+                }
+            },
             _ => {},
         }
 
