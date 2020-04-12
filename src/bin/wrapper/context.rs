@@ -29,26 +29,23 @@ impl<'a> StabCtxt<'a> {
     }
 
     pub fn dump(self, wrapper: &mut Wrapper) {
+        macro_rules! add_features {
+            ($wrapper: expr, $source_map: expr, $features: expr, $convert_op: expr) => {
+                for (elem, spans) in $features {
+                    let feature = $convert_op(*elem);
+                    $wrapper
+                        .uses
+                        .entry(feature.name.clone())
+                        .or_default()
+                        .extend(spans.into_iter().map(|s| convert_span($source_map, *s)));
+                    $wrapper.features.insert(feature);
+                }
+            };
+        }
+
         let source_map = self.session.source_map();
-
-        for (feat_name, spans) in self.lang_features {
-            let feature = convert_feature(ACCEPTED_FEATURES.iter().find(|f| f.name == feat_name).unwrap());
-            wrapper.features.insert(feature);
-            wrapper
-                .uses
-                .entry(feat_name.to_string())
-                .or_default()
-                .extend(spans.into_iter().map(|s| convert_span(source_map, s)));
-        }
-
-        for (stab, spans) in self.lib_features {
-            wrapper.features.insert(convert_stability(stab));
-            wrapper
-                .uses
-                .entry(stab.feature.to_string())
-                .or_default()
-                .extend(spans.into_iter().map(|s| convert_span(source_map, s)));
-        }
+        add_features!(wrapper, source_map, &self.lang_features, convert_lang_feature);
+        add_features!(wrapper, source_map, &self.lib_features, convert_lib_feature);
     }
 }
 
@@ -68,7 +65,8 @@ fn convert_span(source_map: &SourceMap, span: rustc_span::Span) -> cargo_minver:
     }
 }
 
-fn convert_feature(feature: &rustc_feature::Feature) -> cargo_minver::Feature {
+fn convert_lang_feature(name: Symbol) -> cargo_minver::Feature {
+    let feature = ACCEPTED_FEATURES.iter().find(|f| f.name == name).unwrap();
     cargo_minver::Feature {
         name: feature.name.to_string(),
         kind: FeatureKind::Lang,
@@ -76,7 +74,7 @@ fn convert_feature(feature: &rustc_feature::Feature) -> cargo_minver::Feature {
     }
 }
 
-fn convert_stability(stab: rustc_attr::Stability) -> cargo_minver::Feature {
+fn convert_lib_feature(stab: rustc_attr::Stability) -> cargo_minver::Feature {
     cargo_minver::Feature {
         name: stab.feature.to_string(),
         kind: FeatureKind::Lib,
