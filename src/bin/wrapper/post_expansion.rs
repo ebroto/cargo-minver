@@ -18,11 +18,19 @@ struct Visitor<'a, 'scx, 'res> {
     resolver: &'a mut Resolver<'res>,
     source_map: &'a SourceMap,
     imported_macros: HashMap<Symbol, Option<Stability>>,
+    // NOTE: `advanced_slice_patterns` was renamed to `slice_patterns`, so we need a new symbol to track the former feature.
+    min_slice_patterns: Symbol,
 }
 
 impl<'a, 'scx, 'res> Visitor<'a, 'scx, 'res> {
     fn new(stab_ctx: &'a mut StabCtxt<'scx>, resolver: &'a mut Resolver<'res>, source_map: &'a SourceMap) -> Self {
-        Self { stab_ctx, resolver, source_map, imported_macros: Default::default() }
+        Self {
+            stab_ctx,
+            resolver,
+            source_map,
+            imported_macros: Default::default(),
+            min_slice_patterns: Symbol::intern("min_slice_patterns"),
+        }
     }
 
     fn check_non_exhaustive(&mut self, item: &ast::Item) {
@@ -411,6 +419,8 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
                 self.stab_ctx.record_lang_feature(sym::pattern_parentheses, pat.span);
             },
             ast::PatKind::Slice(pats) => {
+                self.stab_ctx.record_lang_feature(self.min_slice_patterns, pat.span);
+
                 for pat in &*pats {
                     let span = pat.span;
                     let inner_pat = match &pat.kind {

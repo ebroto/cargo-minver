@@ -5,7 +5,7 @@ use rustc_span::{source_map::SourceMap, symbol::Symbol, Span};
 
 use std::collections::{HashMap, HashSet};
 
-use cargo_minver::FeatureKind;
+use cargo_minver::{Feature, FeatureKind};
 
 use super::Wrapper;
 
@@ -65,17 +65,34 @@ fn convert_span(source_map: &SourceMap, span: rustc_span::Span) -> cargo_minver:
     }
 }
 
-fn convert_lang_feature(name: Symbol) -> cargo_minver::Feature {
-    let feature = ACCEPTED_FEATURES.iter().find(|f| f.name == name).unwrap();
-    cargo_minver::Feature {
-        name: feature.name.to_string(),
-        kind: FeatureKind::Lang,
-        since: Some(feature.since.parse().unwrap()),
+fn convert_lang_feature(name: Symbol) -> Feature {
+    // Special case the renamed `slice_patterns`.
+    fn maybe_min_slice_patterns(name: Symbol) -> Option<Feature> {
+        if name.to_string() == "min_slice_patterns" {
+            Some(Feature {
+                name: "min_slice_patterns".into(),
+                kind: FeatureKind::Lang,
+                since: Some("1.26.0".parse().unwrap()),
+            })
+        } else {
+            None
+        }
     }
+
+    ACCEPTED_FEATURES
+        .iter()
+        .find(|feat| feat.name == name)
+        .map(|feat| Feature {
+            name: feat.name.to_string(),
+            kind: FeatureKind::Lang,
+            since: Some(feat.since.parse().unwrap()),
+        })
+        .or_else(|| maybe_min_slice_patterns(name))
+        .unwrap()
 }
 
-fn convert_lib_feature(stab: rustc_attr::Stability) -> cargo_minver::Feature {
-    cargo_minver::Feature {
+fn convert_lib_feature(stab: rustc_attr::Stability) -> Feature {
+    Feature {
         name: stab.feature.to_string(),
         kind: FeatureKind::Lib,
         since: match stab.level {

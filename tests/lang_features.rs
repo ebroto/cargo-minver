@@ -250,6 +250,15 @@ test_lang_features!(
         ["6:12 6:18"]
     ),
     (
+        min_slice_patterns,
+        Edition::Edition2015,
+        "1.26.0",
+        [
+            "5:8 5:23", //
+            "6:8 6:23"
+        ]
+    ),
+    (
         cfg_target_feature,
         Edition::Edition2015,
         "1.27.0",
