@@ -126,13 +126,13 @@ impl<'a, 'scx, 'tcx> Visitor<'a, 'scx, 'tcx> {
     }
 
     fn in_const_fn(&self, hir_id: hir::HirId) -> bool {
-        use hir::{Constness, ImplItem, ImplItemKind, Item, ItemKind, Node};
+        use hir::{ImplItem, ImplItemKind, Item, ItemKind, Node};
 
         for (_, node) in self.tcx.hir().parent_iter(hir_id) {
             match node {
                 Node::Item(&Item { kind: ItemKind::Fn(ref sig, ..), .. })
                 | Node::ImplItem(&ImplItem { kind: ImplItemKind::Fn(ref sig, ..), .. })
-                    if sig.header.constness == Constness::Const =>
+                    if sig.header.is_const() =>
                 {
                     return true;
                 }

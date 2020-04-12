@@ -244,6 +244,12 @@ test_lang_features!(
         ["5:7 5:17"]
     ),
     (
+        conservative_impl_trait, //
+        Edition::Edition2015,
+        "1.26.0",
+        ["6:12 6:18"]
+    ),
+    (
         cfg_target_feature,
         Edition::Edition2015,
         "1.27.0",

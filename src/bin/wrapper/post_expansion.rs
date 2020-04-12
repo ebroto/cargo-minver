@@ -291,6 +291,16 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
         visit::walk_lifetime(self, lifetime);
     }
 
+    fn visit_fn_ret_ty(&mut self, ret_ty: &ast::FnRetTy) {
+        if let ast::FnRetTy::Ty(ty) = ret_ty {
+            if let ast::TyKind::ImplTrait(..) = ty.kind {
+                self.stab_ctx.record_lang_feature(sym::conservative_impl_trait, ty.span);
+            }
+        }
+
+        visit::walk_fn_ret_ty(self, ret_ty);
+    }
+
     fn visit_ty(&mut self, ty: &ast::Ty) {
         self.check_macro_use(ty.span);
 
