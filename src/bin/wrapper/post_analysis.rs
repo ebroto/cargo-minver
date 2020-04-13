@@ -112,6 +112,30 @@ impl<'a, 'scx, 'tcx> Visitor<'a, 'scx, 'tcx> {
         }
     }
 
+    fn check_bind_by_move_pattern_guards(&mut self, expr: &hir::Expr, arms: &[hir::Arm]) {
+        let arms_with_guard = arms.iter().filter(|a| a.guard.is_some());
+
+        for arm in arms_with_guard {
+            let tcx = self.tcx;
+
+            arm.pat.walk_always(|p| {
+                if let hir::PatKind::Binding(..) = &p.kind {
+                    let binding_mode = self.tables.extract_binding_mode(tcx.sess, p.hir_id, p.span);
+
+                    if let Some(ty::BindByValue(_)) = binding_mode {
+                        let owner_def_id = expr.hir_id.owner.to_def_id();
+                        let param_env = tcx.param_env(owner_def_id);
+                        let binding_ty = self.tables.node_type(p.hir_id);
+
+                        if !binding_ty.is_copy_modulo_regions(tcx, param_env, p.span) {
+                            self.stab_ctx.record_lang_feature(sym::bind_by_move_pattern_guards, p.span);
+                        }
+                    }
+                }
+            });
+        }
+    }
+
     fn with_item_tables<F>(&mut self, hir_id: hir::HirId, f: F)
     where
         F: FnOnce(&mut Self),
@@ -311,6 +335,8 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, '_, 'tcx> {
                         self.stab_ctx.record_lang_feature(sym::irrefutable_let_patterns, pat.span);
                     }
                 }
+
+                self.check_bind_by_move_pattern_guards(expr, arms);
             },
             _ => {},
         }

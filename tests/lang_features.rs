@@ -553,6 +553,12 @@ test_lang_features!(
         ]
     ),
     (
+        bind_by_move_pattern_guards, //
+        Edition::Edition2015,
+        "1.39.0",
+        ["5:8 5:12"]
+    ),
+    (
         non_exhaustive,
         Edition::Edition2015,
         "1.40.0",
