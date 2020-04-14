@@ -38,6 +38,42 @@ impl<'a, 'scx, 'tcx> Visitor<'a, 'scx, 'tcx> {
         }
     }
 
+    fn process_match(&mut self, expr: &hir::Expr, arms: &[hir::Arm], source: hir::MatchSource) {
+        let tcx = self.tcx;
+        let pat_adjustments = self.tables.pat_adjustments();
+
+        for arm in arms {
+            arm.pat.walk_always(|p| {
+                if pat_adjustments.contains_key(p.hir_id) {
+                    self.stab_ctx.record_lang_feature(sym::match_default_bindings, p.span);
+                }
+
+                if arm.guard.is_some() {
+                    if let hir::PatKind::Binding(..) = &p.kind {
+                        let binding_mode = self.tables.extract_binding_mode(tcx.sess, p.hir_id, p.span);
+
+                        if let Some(ty::BindByValue(_)) = binding_mode {
+                            let owner_def_id = expr.hir_id.owner.to_def_id();
+                            let param_env = tcx.param_env(owner_def_id);
+                            let binding_ty = self.tables.node_type(p.hir_id);
+
+                            if !binding_ty.is_copy_modulo_regions(tcx, param_env, p.span) {
+                                self.stab_ctx.record_lang_feature(sym::bind_by_move_pattern_guards, p.span);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        if let hir::MatchSource::IfLetDesugar { .. } | hir::MatchSource::WhileLetDesugar = source {
+            let pat = &arms[0].pat;
+            if !pat.is_refutable() {
+                self.stab_ctx.record_lang_feature(sym::irrefutable_let_patterns, pat.span);
+            }
+        }
+    }
+
     fn process_struct(&mut self, ty_kind: &ty::TyKind, res: Res, span: Span) {
         if let ty::Adt(def, _) = ty_kind {
             let variant = def.variant_of_res(res);
@@ -109,30 +145,6 @@ impl<'a, 'scx, 'tcx> Visitor<'a, 'scx, 'tcx> {
     fn check_const_constructor(&mut self, def_id: DefId, expr: &hir::Expr) {
         if self.tcx.is_constructor(def_id) && self.tcx.hir().is_const_context(expr.hir_id) {
             self.stab_ctx.record_lang_feature(sym::const_constructor, expr.span);
-        }
-    }
-
-    fn check_bind_by_move_pattern_guards(&mut self, expr: &hir::Expr, arms: &[hir::Arm]) {
-        let arms_with_guard = arms.iter().filter(|a| a.guard.is_some());
-
-        for arm in arms_with_guard {
-            let tcx = self.tcx;
-
-            arm.pat.walk_always(|p| {
-                if let hir::PatKind::Binding(..) = &p.kind {
-                    let binding_mode = self.tables.extract_binding_mode(tcx.sess, p.hir_id, p.span);
-
-                    if let Some(ty::BindByValue(_)) = binding_mode {
-                        let owner_def_id = expr.hir_id.owner.to_def_id();
-                        let param_env = tcx.param_env(owner_def_id);
-                        let binding_ty = self.tables.node_type(p.hir_id);
-
-                        if !binding_ty.is_copy_modulo_regions(tcx, param_env, p.span) {
-                            self.stab_ctx.record_lang_feature(sym::bind_by_move_pattern_guards, p.span);
-                        }
-                    }
-                }
-            });
         }
     }
 
@@ -329,14 +341,7 @@ impl<'tcx> intravisit::Visitor<'tcx> for Visitor<'_, '_, 'tcx> {
                 }
             },
             hir::ExprKind::Match(_, arms, source) => {
-                if let hir::MatchSource::IfLetDesugar { .. } | hir::MatchSource::WhileLetDesugar = source {
-                    let pat = &arms[0].pat;
-                    if !pat.is_refutable() {
-                        self.stab_ctx.record_lang_feature(sym::irrefutable_let_patterns, pat.span);
-                    }
-                }
-
-                self.check_bind_by_move_pattern_guards(expr, arms);
+                self.process_match(expr, arms, source);
             },
             _ => {},
         }
