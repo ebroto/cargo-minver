@@ -159,15 +159,28 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
     }
 
     fn visit_attribute(&mut self, attr: &ast::Attribute) {
-        if let feature
-        @
-        (sym::no_std
-        | sym::target_feature
-        | sym::deprecated
-        | sym::panic_handler
-        | sym::windows_subsystem) = attr.name_or_empty()
-        {
-            self.stab_ctx.record_lang_feature(feature, attr.span);
+        if let ast::AttrKind::Normal(attr_item) = &attr.kind {
+            let path_segments = &attr_item.path.segments;
+            if !path_segments.is_empty() {
+                match path_segments[0].ident.name {
+                    feature
+                    @
+                    (sym::no_std
+                    | sym::target_feature
+                    | sym::deprecated
+                    | sym::panic_handler
+                    | sym::windows_subsystem) => {
+                        self.stab_ctx.record_lang_feature(feature, attr.span);
+                    },
+
+                    // NOTE: These two seem to be hardcoded until register_tool is stabilized
+                    sym::rustfmt | sym::clippy => {
+                        self.stab_ctx.record_lang_feature(sym::tool_attributes, attr.span);
+                    },
+
+                    _ => {},
+                }
+            }
         }
 
         visit::walk_attribute(self, attr);

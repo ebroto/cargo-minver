@@ -371,6 +371,12 @@ test_lang_features!(
         PanicBehavior::Abort
     ),
     (
+        tool_attributes, //
+        Edition::Edition2015,
+        "1.30.0",
+        ["3:0 3:16"]
+    ),
+    (
         pattern_parentheses, //
         Edition::Edition2015,
         "1.31.0",
