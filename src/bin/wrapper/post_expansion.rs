@@ -1,8 +1,9 @@
 use rustc_ast::ast::{self, Pat, RangeEnd, RangeSyntax};
 use rustc_ast::ptr::P;
 use rustc_ast::visit::{self, FnKind};
-use rustc_attr::{Stability, StabilityLevel};
+use rustc_attr::{self as attr, Stability, StabilityLevel};
 use rustc_resolve::{ParentScope, Resolver};
+use rustc_session::lint::Level;
 use rustc_session::Session;
 use rustc_span::hygiene::{ExpnData, ExpnKind};
 use rustc_span::source_map::{SourceMap, Spanned};
@@ -71,6 +72,28 @@ impl<'a, 'scx, 'res> Visitor<'a, 'scx, 'res> {
                     self.stab_ctx.record_lang_feature(sym::repr_packed, item.span);
                 }
             }
+        }
+    }
+
+    fn check_tool_lint(&mut self, attr: &ast::Attribute) {
+        if Level::from_symbol(attr.name_or_empty()).is_none() {
+            return;
+        }
+
+        let meta = match attr.meta() {
+            Some(m) => m,
+            _ => return,
+        };
+
+        if meta
+            .meta_item_list()
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|mi| mi.meta_item())
+            .filter(|mi| mi.is_word() && mi.path.segments.len() > 1)
+            .any(|mi| attr::is_known_lint_tool(mi.path.segments[0].ident))
+        {
+            self.stab_ctx.record_lang_feature(sym::tool_lints, attr.span);
         }
     }
 
@@ -159,6 +182,8 @@ impl<'ast> visit::Visitor<'ast> for Visitor<'_, '_, '_> {
     }
 
     fn visit_attribute(&mut self, attr: &ast::Attribute) {
+        self.check_tool_lint(attr);
+
         if let ast::AttrKind::Normal(attr_item) = &attr.kind {
             let path_segments = &attr_item.path.segments;
             if !path_segments.is_empty() {

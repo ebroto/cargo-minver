@@ -403,6 +403,17 @@ test_lang_features!(
         ]
     ),
     (
+        tool_lints,
+        Edition::Edition2015,
+        "1.31.0",
+        [
+            "2:0 2:46",
+            "4:0 4:34",
+            "5:0 5:30",
+            "6:0 6:26"
+        ]
+    ),
+    (
         self_struct_ctor,
         Edition::Edition2015,
         "1.32.0",
