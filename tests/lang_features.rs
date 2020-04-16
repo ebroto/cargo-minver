@@ -5,15 +5,16 @@ use util::project::{Edition, PanicBehavior};
 
 // Each entry creates a test for a language feature. Input files are taken from the lang_files directory.
 // The format is: (feature name, edition, rustc version, spans, on_panic?, inspect?). Inspect is just for debugging.
+#[rustfmt::skip]
 test_lang_features!(
     (
-        no_std, //
+        no_std,
         Edition::Edition2015,
         "1.6.0",
         ["1:0 1:10"]
     ),
     (
-        augmented_assignments, //
+        augmented_assignments,
         Edition::Edition2015,
         "1.8.0",
         ["11:4 11:11"]
@@ -23,7 +24,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.8.0",
         [
-            "3:0 3:11", //
+            "3:0 3:11",
             "13:4 13:8",
             "20:12 20:16",
             "23:8 23:12",
@@ -35,13 +36,13 @@ test_lang_features!(
         ]
     ),
     (
-        deprecated, //
+        deprecated,
         Edition::Edition2015,
         "1.9.0",
         ["3:0 3:13"]
     ),
     (
-        question_mark, //
+        question_mark,
         Edition::Edition2015,
         "1.13.0",
         ["8:14 8:20"]
@@ -51,7 +52,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.14.0",
         [
-            "4:8 4:20", //
+            "4:8 4:20",
             "5:8 5:20",
             "6:8 6:20",
             "13:8 13:24",
@@ -64,7 +65,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.16.0",
         [
-            "7:16 7:23", //
+            "7:16 7:23",
             "10:12 10:19",
             "20:12 20:19",
             "23:8 23:15"
@@ -75,7 +76,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.17.0",
         [
-            "14:16 14:21", //
+            "14:16 14:21",
             "14:23 14:29",
             "14:31 14:36"
         ]
@@ -85,12 +86,12 @@ test_lang_features!(
         Edition::Edition2015,
         "1.17.0",
         [
-            "3:12 3:16", //
+            "3:12 3:16",
             "6:11 6:15"
         ]
     ),
     (
-        windows_subsystem, //
+        windows_subsystem,
         Edition::Edition2015,
         "1.18.0",
         ["1:0 1:33"]
@@ -100,7 +101,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.18.0",
         [
-            "3:0 3:10", //
+            "3:0 3:10",
             "5:0 5:9",
             "8:4 8:13",
             "11:4 11:13",
@@ -108,7 +109,7 @@ test_lang_features!(
         ]
     ),
     (
-        loop_break_value, //
+        loop_break_value,
         Edition::Edition2015,
         "1.19.0",
         ["3:8 3:16"]
@@ -118,7 +119,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.19.0",
         [
-            "4:0 4:17", //
+            "4:0 4:17",
             "8:4 8:13",
             "23:13 23:24",
             "24:13 24:25",
@@ -140,7 +141,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.20.0",
         [
-            "16:8 16:17", //
+            "16:8 16:17",
             "20:8 20:17",
             "25:8 25:13",
             "29:8 29:13"
@@ -151,7 +152,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.20.0",
         [
-            "4:4 4:17", //
+            "4:4 4:17",
             "9:4 9:22",
             "13:4 13:22"
         ]
@@ -161,7 +162,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.24.0",
         [
-            "3:7 3:15", //
+            "3:7 3:15",
             "5:7 5:15"
         ]
     ),
@@ -170,7 +171,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.25.0",
         [
-            "4:0 6:1", //
+            "4:0 6:1",
             "9:0 12:1"
         ]
     ),
@@ -179,19 +180,19 @@ test_lang_features!(
         Edition::Edition2015,
         "1.25.0",
         [
-            "4:22 4:23", //
+            "4:22 4:23",
             "5:16 5:32",
             "6:16 6:47"
         ]
     ),
     (
-        dotdoteq_in_patterns, //
+        dotdoteq_in_patterns,
         Edition::Edition2015,
         "1.26.0",
         ["3:8 3:14"]
     ),
     (
-        inclusive_range_syntax, //
+        inclusive_range_syntax,
         Edition::Edition2015,
         "1.26.0",
         ["2:18 2:23"]
@@ -212,7 +213,7 @@ test_lang_features!(
         ]
     ),
     (
-        termination_trait, //
+        termination_trait,
         Edition::Edition2015,
         "1.26.0",
         ["3:13 3:30"]
@@ -222,7 +223,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.26.0",
         [
-            "10:12 10:14", //
+            "10:12 10:14",
             "16:23 16:25",
             "20:37 20:39",
             "24:38 24:40"
@@ -233,18 +234,18 @@ test_lang_features!(
         Edition::Edition2015,
         "1.26.0",
         [
-            "2:20 2:30", //
+            "2:20 2:30",
             "5:17 5:27"
         ]
     ),
     (
-        universal_impl_trait, //
+        universal_impl_trait,
         Edition::Edition2015,
         "1.26.0",
         ["5:7 5:17"]
     ),
     (
-        conservative_impl_trait, //
+        conservative_impl_trait,
         Edition::Edition2015,
         "1.26.0",
         ["6:12 6:18"]
@@ -254,12 +255,12 @@ test_lang_features!(
         Edition::Edition2015,
         "1.26.0",
         [
-            "5:8 5:23", //
+            "5:8 5:23",
             "6:8 6:23"
         ]
     ),
     (
-        match_default_bindings, //
+        match_default_bindings,
         Edition::Edition2015,
         "1.26.0",
         ["4:8 4:21"]
@@ -269,14 +270,14 @@ test_lang_features!(
         Edition::Edition2015,
         "1.27.0",
         [
-            "3:6 3:26", //
+            "3:6 3:26",
             "6:10 6:30",
             "10:12 10:32",
             "11:16 11:36"
         ]
     ),
     (
-        target_feature, //
+        target_feature,
         Edition::Edition2015,
         "1.27.0",
         ["3:0 3:34"]
@@ -308,7 +309,7 @@ test_lang_features!(
         ]
     ),
     (
-        dyn_trait, //
+        dyn_trait,
         Edition::Edition2015,
         "1.27.0",
         ["5:11 5:16"]
@@ -318,7 +319,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.27.0",
         [
-            "2:0 4:1", //
+            "2:0 4:1",
             "13:4 15:5"
         ]
     ),
@@ -327,7 +328,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.28.0",
         [
-            "6:0 6:14", //
+            "6:0 6:14",
             "9:0 11:1",
             "14:0 17:1",
         ]
@@ -353,31 +354,31 @@ test_lang_features!(
         Edition::Edition2015,
         "1.30.0",
         [
-            "2:8 2:15", //
+            "2:8 2:15",
             "3:13 3:20",
         ]
     ),
     (
-        used, //
+        used,
         Edition::Edition2015,
         "1.30.0",
         ["2:0 2:21"]
     ),
     (
-        panic_handler, //
+        panic_handler,
         Edition::Edition2015,
         "1.30.0",
         ["5:0 5:16"],
         PanicBehavior::Abort
     ),
     (
-        tool_attributes, //
+        tool_attributes,
         Edition::Edition2015,
         "1.30.0",
         ["3:0 3:16"]
     ),
     (
-        pattern_parentheses, //
+        pattern_parentheses,
         Edition::Edition2015,
         "1.31.0",
         ["5:8 5:12"]
@@ -387,7 +388,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.31.0",
         [
-            "3:0 3:5", //
+            "3:0 3:5",
             "7:4 7:9"
         ]
     ),
@@ -396,7 +397,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.31.0",
         [
-            "6:7 6:9", //
+            "6:7 6:9",
             "9:13 9:15",
             "10:12 10:13",
             "10:18 10:19"
@@ -418,7 +419,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.32.0",
         [
-            "7:8 7:12", //
+            "7:8 7:12",
             "12:12 12:20",
             "18:16 18:20",
             "26:8 26:12",
@@ -430,7 +431,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.32.0",
         [
-            "8:4 8:8", //
+            "8:4 8:8",
             "9:17 9:21",
             "11:12 11:16",
             "17:4 17:8",
@@ -449,7 +450,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.33.0",
         [
-            "2:11 2:18", //
+            "2:11 2:18",
             "3:14 3:21",
         ]
     ),
@@ -458,7 +459,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.33.0",
         [
-            "4:11 4:12", //
+            "4:11 4:12",
             "5:14 5:15",
         ]
     ),
@@ -467,12 +468,12 @@ test_lang_features!(
         Edition::Edition2015,
         "1.33.0",
         [
-            "3:20 3:21", //
+            "3:20 3:21",
             "4:16 4:17",
         ]
     ),
     (
-        repr_packed, //
+        repr_packed,
         Edition::Edition2015,
         "1.33.0",
         ["4:0 6:1"]
@@ -482,7 +483,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.33.0",
         [
-            "3:6 3:31", //
+            "3:6 3:31",
             "6:10 6:35",
             "10:12 10:37",
             "11:16 11:41"
@@ -493,7 +494,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.33.0",
         [
-            "3:0 3:69", //
+            "3:0 3:69",
             "7:0 7:20",
             "10:18 10:84"
         ]
@@ -503,7 +504,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.33.0",
         [
-            "15:13 15:18", //
+            "15:13 15:18",
             "19:28 19:33",
             "24:4 24:9",
             "30:17 30:22",
@@ -513,13 +514,13 @@ test_lang_features!(
         ]
     ),
     (
-        extern_crate_self, //
+        extern_crate_self,
         Edition::Edition2015,
         "1.34.0",
         ["1:0 1:25"]
     ),
     (
-        type_alias_enum_variants, //
+        type_alias_enum_variants,
         Edition::Edition2015,
         "1.37.0",
         [
@@ -538,13 +539,13 @@ test_lang_features!(
         ]
     ),
     (
-        repr_align_enum, //
+        repr_align_enum,
         Edition::Edition2015,
         "1.37.0",
         ["4:0 6:1"]
     ),
     (
-        underscore_const_names, //
+        underscore_const_names,
         Edition::Edition2015,
         "1.37.0",
         ["1:6 1:7"]
@@ -554,7 +555,7 @@ test_lang_features!(
         Edition::Edition2018,
         "1.39.0",
         [
-            "4:4 4:29", //
+            "4:4 4:29",
             "7:0 12:1",
             "8:17 8:25",
             "11:4 11:20"
@@ -565,7 +566,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.39.0",
         [
-            "3:8 3:42", //
+            "3:8 3:42",
             "7:38 7:43",
             "11:28 11:62",
             "14:28 14:62",
@@ -576,7 +577,7 @@ test_lang_features!(
         ]
     ),
     (
-        bind_by_move_pattern_guards, //
+        bind_by_move_pattern_guards,
         Edition::Edition2015,
         "1.39.0",
         ["5:8 5:12"]
@@ -586,7 +587,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.40.0",
         [
-            "4:0 4:11", //
+            "4:0 4:11",
             "7:0 7:9",
         ]
     ),
@@ -595,7 +596,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.40.0",
         [
-            "3:6 3:13", //
+            "3:6 3:13",
             "6:10 6:17",
             "10:12 10:19",
             "11:16 11:23"
@@ -606,7 +607,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.40.0",
         [
-            "9:13 9:18", //
+            "9:13 9:18",
             "10:13 10:21",
             "13:12 13:17",
             "14:12 14:20"
@@ -617,7 +618,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.42.0",
         [
-            "4:0 6:1", //
+            "4:0 6:1",
             "9:0 11:1",
             "14:0 16:1",
         ]
@@ -627,7 +628,7 @@ test_lang_features!(
         Edition::Edition2015,
         "1.42.0",
         [
-            "6:15 6:17", //
+            "6:15 6:17",
             "7:12 7:14",
             "8:9 8:11",
             "14:9 14:16",
